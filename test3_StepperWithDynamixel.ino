@@ -1,6 +1,9 @@
 /* Synchronize Stepper Nema23 and Dynamixel Motors */
 /* Reference for Stepper:   test1_SimpleStepperControl.ino
-                 Dynamixel: k_Read_Write from OpenCR Examples */
+                 Dynamixel: k_Read_Write from OpenCR Examples 
+Devel Update: Wed 18/12/19 Homing functions created, inserted millis-macros for timing
+              Thu 19/12/19 Simple function for Synchrovize stp-dxl for P2P task */
+
 #include <AccelStepper.h> 
 #include <MultiStepper.h>
 #include <DynamixelWorkbench.h>
@@ -23,6 +26,12 @@
 #define BAUDRATE  57600
 #define DXL_ID    1
 
+// Timing variables
+int stpWritePeriod = 1000;              // micros
+int dxlWritePeriod = 2000;              // millis
+unsigned long time_now_micros = 0;             // Set timer counter
+unsigned long time_now_millis = 0;      // Set timer counter
+
 
 // Classes Objects definition
 AccelStepper stepper1(motorInterfaceType, stepPin, dirPin); // Stepper Motor, it has STP_ID
@@ -43,7 +52,6 @@ void setup() {
   long current_stepper_position;
   int buttonState         =   0;   // variable for reading the pushbutton status
   int move_finished       =   1;   // Used to check if move is completed
-  long initial_homing     =  -1;   // Used to Home Stepper at startup
 
   // stepper
   pinMode(stepPin, OUTPUT);
@@ -127,16 +135,15 @@ void setup() {
   // Stepper Check // MUST be put inside while loop!
   InitialStepperCheck(stepper1, stp1_id);
 
+  delay(1000);
 
-  // Homing Dynamixel
+  // Homing Stepper using AccelStepper 
+  HomingStepper(stepper1, stp1_id);
+
+  // Homing Dynamixel using Dynamixel Workbench
   HomingDynamixel(dxl_wb, dxl_id);
 
-  
-  // Homing Stepper using AccelStepper - Blocks Code until Stepper Homing Finishes
-  HomingStepper(stepper1, stp1_id, initial_homing);
-
-
-
+  // Turning Off torque in Dynamixel
   result = dxl_wb.torqueOff(dxl_id, &log);
   if (result == false)
   {
@@ -153,21 +160,32 @@ void setup() {
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
 
+  uint8_t dxl_id = DXL_ID;
+  uint8_t stp1_id = STP_ID;
+  int32_t dxl_goal_pos = 0;
+  int32_t stp_goal_pos = 0;
+  
+  // print present positions:
+  SimpleSyncP2P(dxl_wb, dxl_id, stepper1, stp1_id, dxl_goal_pos, stp_goal_pos);
+  delay(5000);
 }
 
 // Custom Function Definitions
 
 // InitialStepperCheck
 bool InitialStepperCheck(AccelStepper AccelStepperMotor, uint8_t stp_ID){
+  time_now_micros = micros();
   bool  check_stepper_running = AccelStepperMotor.isRunning();
   if (check_stepper_running == true)
   {
     Serial.printf("Stepper Motor: %d is running! \n",stp_ID);
     Serial.printf("Waiting for Stepper Motor: %d to stop to comlete check! \n",stp_ID);
     AccelStepperMotor.stop();
-    delay(1000);
+    //delay(1000);
+    while(micros() < time_now_micros + stpWritePeriod){
+        //wait approx. [stpWritePeriod] μs
+    }
   }
   else
   {
@@ -179,7 +197,10 @@ bool InitialStepperCheck(AccelStepper AccelStepperMotor, uint8_t stp_ID){
 }
 
 // HomingStepper
-bool HomingStepper(AccelStepper AccelStepperMotor, uint8_t stp_ID, long init_homing_step){
+bool HomingStepper(AccelStepper AccelStepperMotor, uint8_t stp_ID){
+  time_now_micros = micros();
+  long init_homing_step =  -1;
+  
   Serial.print("Stepper is Homing . . . . . . . . . . .\n ");
   
   digitalWrite(ledPin, HIGH);           // Orange LED is ONN while HOMING
@@ -188,38 +209,49 @@ bool HomingStepper(AccelStepper AccelStepperMotor, uint8_t stp_ID, long init_hom
     AccelStepperMotor.moveTo(init_homing_step);    // Set the position to move to
     init_homing_step--;                   // Decrease by 1 for next move if needed
     AccelStepperMotor.run();                     // Start moving the stepper
-    delayMicroseconds(500);
+    //delayMicroseconds(500);
+    while(micros() < time_now_micros + stpWritePeriod){
+        //wait approx. [stpWritePeriod] μs
+    }
     } // while
     
   // since while breaks, button is pressed => HOME is reached!
   AccelStepperMotor.setCurrentPosition(0);
-  AccelStepperMotor.setMaxSpeed(500);            // Caution: the maximum speed achievable depends on your processor and clock speed. The default maxSpeed is 1.0 steps per second.
+  AccelStepperMotor.setMaxSpeed(500);               // Caution: the maximum speed achievable depends on your processor and clock speed. The default maxSpeed is 1.0 steps per second.
   AccelStepperMotor.setAcceleration(300);
   init_homing_step=1;
   
-  while (!digitalRead(buttonPin)) {      // Make the Stepper move CCW until the switch is activated   
-    AccelStepperMotor.moveTo(init_homing_step);    // Set the position to move to
-    init_homing_step++;                   // Decrease by 1 for next move if needed
-    AccelStepperMotor.run();                     // Start moving the stepper
-    delayMicroseconds(500);
+  while (!digitalRead(buttonPin)) {                 // Make the Stepper move CCW until the switch is activated   
+    AccelStepperMotor.moveTo(init_homing_step);     // Set the position to move to
+    init_homing_step++;                             // Decrease by 1 for next move if needed
+    AccelStepperMotor.run();                        // Start moving the stepper
+    //delayMicroseconds(500);
+    while(micros() < time_now_micros + stpWritePeriod){
+    //wait approx. [stpWritePeriod] μs
+    }
     } // while
 
   Serial.print("Homing finished. \n");
-  delay(1000);                          // Pause for 1 sec
+  delay(1000);                                      // Pause for 1 sec
   
   Serial.print("Setup finished. Ready for action.  \n");
-  AccelStepperMotor.setMaxSpeed(1000.0);         // Set Max Speed of Stepper (Faster for regular movements)
-  AccelStepperMotor.setAcceleration(1000.0);     // Set Acceleration of Stepper
+  AccelStepperMotor.setMaxSpeed(1000.0);            // Set Max Speed of Stepper (Faster for regular movements)
+  AccelStepperMotor.setAcceleration(1000.0);        // Set Acceleration of Stepper
 
-  digitalWrite(ledPin, LOW);           // Orange LED is OFF
+  digitalWrite(ledPin, LOW);                        // Orange LED is OFF
 }
 
 // HomingDynamixel
   bool HomingDynamixel(DynamixelWorkbench DxlMotor, uint8_t MOTOR_DXL_ID){
+  time_now_millis = millis();
+    
   bool result = false;
-  int32_t dxl_homing_position = 251000;
+  int32_t dxl_homing_position = 0;
   result = DxlMotor.itemWrite(MOTOR_DXL_ID, "Goal_Position", dxl_homing_position);
-  delay(200);
+  //delay(1500);
+  while(millis() < time_now_millis + dxlWritePeriod){
+  //wait approx. [dxlWritePeriod] ms
+  }
   if (result == false)
   {
   //Serial.println(log);
@@ -229,5 +261,32 @@ bool HomingStepper(AccelStepper AccelStepperMotor, uint8_t stp_ID, long init_hom
   {
   Serial.printf("Dynamixel Motor moves to position: %d Check OK. \n",dxl_homing_position);
   }
+
+}
+
+// SimpleSyncP2P
+bool SimpleSyncP2P(DynamixelWorkbench DxlMotor, uint8_t MOTOR_DXL_ID, AccelStepper AccelStepperMotor, uint8_t stp_ID, int32_t DxlGoalPos, int32_t StpGoalPos){
+  long initial_stp_pos = 0; // Assumption! Homing was executed in previous steps
+  bool result = false;
+  const char *log;
+  int32_t get_data = 0;
+  // Initial Stepper Position
+  initial_stp_pos = AccelStepperMotor.currentPosition();
+  Serial.printf("[Stepper Motor %d ] Present Position : %ld \n",stp_ID,initial_stp_pos);
+  // Initial Dynamixel Position
+  result = DxlMotor.readRegister(MOTOR_DXL_ID, "Present_Position", &get_data , &log);
+    if (result == false)
+    {
+      Serial.println(log);
+    }
+    else
+    {
+      Serial.print("[ID ");
+      Serial.print(MOTOR_DXL_ID);
+      Serial.print(" ]");
+      Serial.print(" Present Position : ");
+      Serial.println(get_data);
+    }
+  // Move stepper
 
 }
