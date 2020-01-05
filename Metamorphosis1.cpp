@@ -1,5 +1,10 @@
-bool Metamorphosis(DynamixelWorkbench DxlMotor, uint8_t MOTOR_DXL_ID,AccelStepper AccelStepperMotor, PseudoJointStruct pseudo, long thpGoalPosition){
+bool Metamorphosis(DynamixelWorkbench DxlMotor, uint8_t MOTOR_DXL_ID,AccelStepper AccelStepperMotor, PseudoJointStruct pseudo, float thpGoalPosition){
+// Variables/Pin to declare/set rad2stpFactor, metErrPin_ID, metLedPin_ID
 
+// gets Stepper Objects, ID's and pseudojoints angles
+// Changes pseudojoint's configuration
+  //String thpStrGoalPosition = String(thpGoalPosition,4);              // Convert float to string array for printf use
+  char outputString[100];
   const char *log;
   bool status;
   int stpWritePeriod = 500;    // [micros]
@@ -27,8 +32,9 @@ bool Metamorphosis(DynamixelWorkbench DxlMotor, uint8_t MOTOR_DXL_ID,AccelSteppe
   else
   {
     Serial.printf("[Stepper Motor %d   ] Homing SUCCESSFUL. PROCEEDING to Metamorphosis!\n",pseudo.id);
-      AccelStepperMotor.setCurrentPosition(0);                            // This is zero position
-      Serial.printf("[Stepper Motor %d   ] Goal Position %ld rad. \n",pseudo.id,thpGoalPosition);
+    AccelStepperMotor.setCurrentPosition(0);                            // This is zero position
+    sprintf(outputString,"[Stepper Motor %d   ] Goal Position %f rad. \n",pseudo.id,thpGoalPosition);
+    Serial.println(outputString);
   }
 
   delay(1000);
@@ -49,12 +55,14 @@ bool Metamorphosis(DynamixelWorkbench DxlMotor, uint8_t MOTOR_DXL_ID,AccelSteppe
     while(micros() < time_now_micros + stpWritePeriod){}
     // Display current stepper angular posiion
     long stpPresentPosition = AccelStepperMotor.currentPosition();
-    long thpPresentPosition = (1/pseudo.rad2stpFactor)*stpPresentPosition;
-        Serial.printf("[Stepper  Motor %d  ] Present Position : %ld Goal Position : %ld \n",pseudo.id,thpPresentPosition,thpGoalPosition);
+    float thpPresentPosition = (1/pseudo.rad2stpFactor)*stpPresentPosition;
+    sprintf(outputString,"[Stepper  Motor %d  ] Present Position : %f rad Goal Position : %f rad. \n",pseudo.id,thpPresentPosition,thpGoalPosition);
+    Serial.println(outputString);
     }
 
 // when steppers reach Goal Position => Log to Screen:Anatomy Reached 
-  Serial.printf("Pseudojoint: %d reached: %ld rad.",pseudo.id,thpGoalPosition);
+  sprintf(outputString,"Pseudojoint: %d reached: %f rad. \n",pseudo.id,thpGoalPosition);
+  Serial.println(outputString);
 
 // Locking
   /*result = Locking()

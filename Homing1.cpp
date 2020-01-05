@@ -1,6 +1,4 @@
 bool Homing(AccelStepper AccelStepperMotor, PseudoJointStruct pseudo){
-// Compiles successfully Sun. 5/1/2020
-// Only for 1 motor
 
 // Moves motor until Homing Hall Sensor(hsens0) is ENABLED
   bool status;
