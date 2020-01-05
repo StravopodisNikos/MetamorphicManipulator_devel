@@ -1,63 +1,87 @@
-bool Metamorphosis(AccelStepper AccelStepperMotor, uint8_t stp_ID, float thp){
-// gets Stepper Objects, ID's and pseudojoints angles
-// Changes pseudojoint's configuration
+bool Metamorphosis(DynamixelWorkbench DxlMotor, uint8_t MOTOR_DXL_ID,AccelStepper AccelStepperMotor, PseudoJointStruct pseudo, long thpGoalPosition){
 
-// if Halls Sensors in each pseudo angle
-// 		Reads current anatomy=>Reads ENABLED Hall sensor
-// else
-//		always Homing before Metamorphosis
-	result = Homing1();
-// end
-
-// Logs out to screen Current->Goal
+  const char *log;
+  bool status;
+  int stpWritePeriod = 500;    // [micros]
+// Sets Torque off for connected Dynamixel Motors
+  bool result = DxlMotor.torqueOff(MOTOR_DXL_ID, &log);
   if (result == false)
   {
-  	erial.printf("[Stepper Motor %d   ] Homing ERROR.    \n",stp_ID);
-    Serial.println("Cannot continue! ABORTING!");
+      Serial.printf("Failed to disable torque on Dynamixel Motor: %d.    ABORTING Metamorphosis!\n",MOTOR_DXL_ID);
   }
   else
   {
-	Serial.printf("[Stepper Motor %d   ] Homing SUCCESSFUL. \n",stp_ID);
-    Serial.println("Continues to METAMORPHOSIS!");
-    AccelStepperMotor.setCurrentPosition(0);							// This is zero position
-    Serial.printf("[Stepper Motor %d   ] Goal Position %ld rad. \n",stp_ID,thp);
+      Serial.printf("Succeeded to disable torque on Dynamixel Motor: %d. PROCEEDING to Homing steppers!\n",MOTOR_DXL_ID);
   }
 
-delay(100);
-	digitalWrite(metLedPin_ID, HIGH);           						// Blue LED is ONN while METAMORPHOSIS
+  delay(1000);
+
+
+//  Always Homing Steppers before Metamorphosis
+  result = Homing(AccelStepperMotor,pseudo);
+  if (result == false)
+  {
+      Serial.printf("[Stepper Motor %d   ] Homing ERROR.\n",pseudo.id);
+      Serial.println("Cannot continue! ABORTING!");
+  }
+  else
+  {
+    Serial.printf("[Stepper Motor %d   ] Homing SUCCESSFUL. PROCEEDING to Metamorphosis!\n",pseudo.id);
+      AccelStepperMotor.setCurrentPosition(0);                            // This is zero position
+      Serial.printf("[Stepper Motor %d   ] Goal Position %ld rad. \n",pseudo.id,thpGoalPosition);
+  }
+
+  delay(1000);
+  digitalWrite(pseudo.metLedPin_ID, HIGH);                                       // Blue LED is ONN while METAMORPHOSIS
 
 // Set Goal Anatomy -> Converts thp to steps
-  	float metSpeed = 600.0*0.000277778;
-	long thp_stp = thp*rad2stpFactor;
-   	AccelStepperMotor.moveTo(thp_stp);     								// Set the absolute position to move to
-   	AccelStepperMotor.setSpeed(metSpeed);
+    float metSpeed = 600.0*0.000277778;
+  long stpGoalPosition = thpGoalPosition*pseudo.rad2stpFactor;                       // Convert rad to steps
+    AccelStepperMotor.moveTo(stpGoalPosition);                                // Set the absolute position to move to
+    AccelStepperMotor.setSpeed(metSpeed);                               // Always set speed after moveTo if ct speed is desired
 
 // Move Steppers to Goal Position, moves until distance2Go->0
-   	time_now_micros =  micros();
-   	while(AccelStepperMotor.distanceToGo() != 0){
-   		AccelStepperMotor.runSpeed();
-		while(micros() < time_now_micros + stpWritePeriod){}	
-   	}
+    unsigned long time_now_micros =  micros();
+    while(AccelStepperMotor.distanceToGo() > 5)                             // Stepping Threshold=5
+    {                           
+      // Run the motor
+      AccelStepperMotor.runSpeed();
+    while(micros() < time_now_micros + stpWritePeriod){}
+    // Display current stepper angular posiion
+    long stpPresentPosition = AccelStepperMotor.currentPosition();
+    long thpPresentPosition = (1/pseudo.rad2stpFactor)*stpPresentPosition;
+        Serial.printf("[Stepper  Motor %d  ] Present Position : %ld Goal Position : %ld \n",pseudo.id,thpPresentPosition,thpGoalPosition);
+    }
 
 // when steppers reach Goal Position => Log to Screen:Anatomy Reached 
-Serial.println("Pseudojoint: %d reached: %ld rad.",stp_ID,thp);
+  Serial.printf("Pseudojoint: %d reached: %ld rad.",pseudo.id,thpGoalPosition);
 
-// when locks ok => Log to Screen:Anatomy Locked
-result = locking1()
-//Serial.println("Pseudojoint: %d LOCKED",stp_ID);
-// when locks ok => Turn off motor
+// Locking
+  /*result = Locking()
+  if (result == false)
+  {
+      Serial.printf("[Stepper Motor %d   ] Locking ERROR.\n",pseudo.id);
+      Serial.println("Cannot continue! ABORTING!");
+  }
+  else
+  {
+    Serial.printf("[Stepper Motor %d   ] Locking SUCCESSFUL. PROCEEDING to Turning off Motor!\n",pseudo.id);
+    // Turn off stepper
+
+  }*/
 
 // fival check motor status and return state
-	if(AccelStepperMotor.isRunning()){
-		Serial.printf("[Stepper Motor %d   ] Metamorphosis ERROR.    \n",stp_ID);
-		digitalWrite(errPin, HIGH);										// Red LED is ON
-		status = false;
-	}
-	else{
-		Serial.printf("[Stepper Motor %d   ] Metamorphosis FINISHED. \n",stp_ID);
-		digitalWrite(metLedPin_ID, LOW); 								// Blue LED is OFF
-		status = true;
-	}
+  result = AccelStepperMotor.isRunning();
+  if(result == true){
+    Serial.printf("[Stepper Motor %d   ] Metamorphosis ERROR.    \n",pseudo.id);
+    digitalWrite(pseudo.metErrPin_ID, HIGH);                               // Red LED is ON
+    status = false;
+  }
+  else{
+    Serial.printf("[Stepper Motor %d   ] Metamorphosis FINISHED. \n",pseudo.id);
+    digitalWrite(pseudo.metLedPin_ID, LOW);                                // Blue LED is OFF
+    status = true;
+  }
 
 return status;
 } // END OF FUNCTION
