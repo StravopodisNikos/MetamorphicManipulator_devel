@@ -89,7 +89,7 @@ const int spr           = 3200;             // [steps/rev]
 const int GEAR_FACTOR   = 40;
 
 // Timing variables
-const int ft       = 100;                // [1 MHz]
+const int ft       = 5;                // [1 MHz]
 int stpWritePeriod = 50;                                                                 // millis
 int dxlWritePeriod = 50;                                                                 // millis
 unsigned long time_now_micros = 0;                                                       // Set timer counter
@@ -326,26 +326,27 @@ void setup()
   delay(1000);
 
   // VII. SImple P2P Motion StepperNema34 + 2 Dynamixels
-  ///*
   int32_t DxlInitPos = 0;
-  int32_t DxlGoalPosition = 150000;
+  int32_t DxlGoalPosition = 100000;
   int32_t DxlVmax = 1000;
   int32_t DxlAmax = 1000;
   float StpInitPos = 0;
   //double StpGoalPosition = 0.25*6.28318531;
-  float StpGoalPosition = 0.25*6.28312;
-  float StpVmax = 10.0000;
-  float StpAmax = 1.0000;
+  float StpGoalPosition = 0.15*6.28312;           // 0.15 for 151000
+  float StpVmax = 5.0000;
+  float StpAmax = 5.0000;
   uint8_t MotorsIDs[] = {DXL1_ID, DXL2_ID, STP_ID};
   int32_t DxlTrapzProfParams[] = {DxlInitPos, DxlGoalPosition, DxlVmax, DxlAmax};
   float   StpTrapzProfParams[] = {StpInitPos, StpGoalPosition, StpVmax, StpAmax};
   int MotorsIds_size = 3;
   int TrapzProfParams_size =4;
 
-  // Simple Sync Stepper-Dynamixel motor for P2P motion:
+  // Simple Sync Stepper-Dynamixel motors for P2P motion:
+  Serial.println("Started Sync P2P Dynamixels-Stepper");
   SimpleSyncP2P_TrapzVelProf_SDK(MotorsIDs, MotorsIds_size, DxlTrapzProfParams, StpTrapzProfParams, TrapzProfParams_size, groupSyncWrite_GP_A_V_LED, groupSyncRead_PP_M_MS, packetHandler, portHandler);
-  //*/
-
+  Serial.println("Finished Sync P2P Dynamixels-Stepper");
+  delay(1000);
+  
   // Disable Dynamixel#1 Torque
   dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, DXL1_ID, ADDR_PRO_TORQUE_ENABLE, TORQUE_DISABLE, &dxl_error);
   if (dxl_comm_result != COMM_SUCCESS)
@@ -800,7 +801,7 @@ for(int id_count = 0; id_count <2; id_count++){
       // V. Allocate params for Write from Byte Array
       int32_t dxl_home_position = 0;
       int32_t dxl_home_velocity = 2000;                                            // Homes with HALF of MAX Velocity
-      int32_t dxl_home_acceleration = 5000;                                        // Homes with FULL Acceleration
+      int32_t dxl_home_acceleration = 3000;                                        // Homes with FULL Acceleration
 
       param_indirect_data_for_write[0] = DXL_LOBYTE(DXL_LOWORD(dxl_home_position));
       param_indirect_data_for_write[1] = DXL_HIBYTE(DXL_LOWORD(dxl_home_position));
@@ -970,11 +971,11 @@ bool SimpleSyncP2P_TrapzVelProf_SDK( uint8_t *MotorsIDs, int MotorsIds_size, int
      */
     float a  = ( 2 * pi ) / (  spr );                                                   // Stepper Motor Step Angle(Angular Position of Motor shaft)[rad]
     float ag = ( 2 * pi ) / ( GEAR_FACTOR * spr );                                      // Geared Motor Step Angle(Angular Position of Output shaft of Gearbox )[rad]
-    Serial.print("Angle per step(a) = "); Serial.print(ag, 6); Serial.print(" [rad] "); 
+    Serial.print("Angle per step(a) = "); Serial.print(ag, 6); Serial.println(" [rad] "); 
     float h  = StpTrapzProfParams[1]-StpTrapzProfParams[0];                             // Calculate displacement in [rad]
     //h = abs(h);                                                                       // ...
     float h_step = round( h / ag );                                                     // Calculate displacement in [steps]
-    Serial.print("Total number of Stepper Motor steps(h_step)  = "); Serial.print(h_step); Serial.print(" [steps] "); 
+    Serial.print("Total number of Stepper Motor steps(h_step)  = "); Serial.print(h_step); Serial.println(" [steps] "); 
 
     long max_s_lim = pow(StpTrapzProfParams[2],2) / (2 * ag * StpTrapzProfParams[3] * 100 );  // Number of needed steps to accelerate to desired SPEED
     long accel_lim = h_step * StpTrapzProfParams[3] / ( 2 *StpTrapzProfParams[3]  );          // Number of needed steps to accelerate to desired ACCELERATION
@@ -1330,14 +1331,14 @@ bool SimpleSyncP2P_TrapzVelProf_SDK( uint8_t *MotorsIDs, int MotorsIds_size, int
 // =============================================================================================================================================
           StpPresentPosition++;
           // IV.b.1.I. Locate position in ramp
-
+          const float RAMP_FACTOR = 0.1;
           if(segmentExists)                                                                             // Linear Segment exists
           {
                 Serial.println("Segment exists");                               
                 if(StpPresentPosition<nmov_Ta){
                   Serial.println("Acceleration Phase");
                   accel_count++;                                                                        // Acceleration Phase: delta_t -> minimizes
-                  new_delta_t =  delta_t - 0.5 * ( (2*delta_t+rest)/(4*accel_count+1) );                // c_n [sec]
+                  new_delta_t =  delta_t - RAMP_FACTOR * ( (2*delta_t+rest)/(4*accel_count+1) );                // c_n [sec]
                   //new_rest = (2*delta_t + rest)*mod(4*accel_count+1);                                 // r_n
                 }else if( StpPresentPosition>nmov_Ta && StpPresentPosition<(nmov_Ta+nmov_linseg) ){     // Linear Segment: delta_t -> constant
                   ctVel_count++;
@@ -1350,7 +1351,7 @@ bool SimpleSyncP2P_TrapzVelProf_SDK( uint8_t *MotorsIDs, int MotorsIds_size, int
                   Serial.println("Decelleration Phase");
                   decel_count++;                                                                        // Negative Value!
                   Serial.println(decel_count);
-                  new_delta_t =  delta_t - 0.5 * ( (2*delta_t+rest)/(4*decel_count+1) );                // Deceleration Phase: delta_t -> maximizes [sec] 
+                  new_delta_t =  delta_t - RAMP_FACTOR * ( (2*delta_t+rest)/(4*decel_count+1) );                // Deceleration Phase: delta_t -> maximizes [sec] 
                 }                                                                         
           }
           else
@@ -1360,13 +1361,13 @@ bool SimpleSyncP2P_TrapzVelProf_SDK( uint8_t *MotorsIDs, int MotorsIds_size, int
                 {
                   Serial.println("Acceleration Phase");
                   accel_count++;
-                  new_delta_t = delta_t - 0.5 * ((2*delta_t+rest)/(4*accel_count+1) );                           // c_n [sec]
+                  new_delta_t = delta_t - RAMP_FACTOR * ((2*delta_t+rest)/(4*accel_count+1) );                           // c_n [sec]
 
                 }                                   
                 else{                                                                                   // Deceleration Phase: delta_t -> maximizes
                   Serial.println("Decelleration Phase");
                   decel_count++;                                                                        // Negative Value!
-                  new_delta_t = delta_t - 0.5 * ((2*delta_t+rest)/(4*decel_count+1) );                           // Deceleration Phase: delta_t -> maximizes [sec] 
+                  new_delta_t = delta_t - RAMP_FACTOR * ((2*delta_t+rest)/(4*decel_count+1) );                           // Deceleration Phase: delta_t -> maximizes [sec] 
                 }                                                                       
           }
           
@@ -1384,7 +1385,7 @@ bool SimpleSyncP2P_TrapzVelProf_SDK( uint8_t *MotorsIDs, int MotorsIds_size, int
           Serial.print("StpPresentPosition="); Serial.println(StpPresentPosition);
 
           // =============================================================================================================================================      
-///*
+/*
       // IX.a. Syncread present position from indirectdata2
           dxl_comm_result = groupSyncRead_PP_M_MS.txRxPacket();
           if (dxl_comm_result != COMM_SUCCESS) packetHandler->getTxRxResult(dxl_comm_result);
@@ -1424,8 +1425,8 @@ bool SimpleSyncP2P_TrapzVelProf_SDK( uint8_t *MotorsIDs, int MotorsIds_size, int
 
           Serial.printf("[Dynamixel Motor ID:%03d] GoalPos:%d  PresPos:%d  IsMoving:%d \n", dxl_id[0], DxlTrapzProfParams[1], dxl_present_position[0], dxl_moving[0]);
           Serial.printf("[Dynamixel Motor ID:%03d] GoalPos:%d  PresPos:%d  IsMoving:%d \n", dxl_id[1], DxlTrapzProfParams[1], dxl_present_position[1], dxl_moving[1]);
-//*/
-      //}while(abs(dxl_home_position - dxl_present_position[0]) > DXL_MOVING_STATUS_THRESHOLD);
+*/
+      //}while(  ( abs(DxlTrapzProfParams[1] - dxl_present_position[0]) > DXL_MOVING_STATUS_THRESHOLD ) && ( (abs(h_step - StpPresentPosition) != 0) ) );
       //}while(   (millis() < time_now_millis + DxlTimeExec)  );
       }while( ( (abs(h_step - StpPresentPosition) != 0) ));
 
