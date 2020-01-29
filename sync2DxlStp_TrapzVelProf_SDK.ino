@@ -84,9 +84,12 @@
 #define STP_MOVING_STATUS_THRESHOLD     1
 
 // Numeric Type Definitions
-const float pi = 3.14159265359;
+const float pi          = 3.14159265359;
+const int spr           = 3200;             // [steps/rev]
+const int GEAR_FACTOR   = 40;
 
 // Timing variables
+const int ft       = 100;                // [1 MHz]
 int stpWritePeriod = 50;                                                                 // millis
 int dxlWritePeriod = 50;                                                                 // millis
 unsigned long time_now_micros = 0;                                                       // Set timer counter
@@ -309,121 +312,40 @@ void setup()
     Serial.print("Dynamixel#2 has been successfully connected \n");
   }
 
- // IV. Homing Stepper Motor[Joint1] using AccelStepper 
- HomingStepper(stepper1, stp1_id);
- delay(1000);
+  // IV. Homing Stepper Motor[Joint1] using AccelStepper 
+  //HomingStepper(stepper1, stp1_id);
+  //delay(1000);
 
- // V.  Homing Dynamixel Motors[Joint2,3] using Dynamixel SDK
- //HomingDynamixelSDK(groupSyncWriteGoalPos,packetHandler,portHandler); 
+  // V.  Homing Dynamixel Motors[Joint2,3] using Dynamixel SDK
+  //HomingDynamixelSDK(groupSyncWriteGoalPos,packetHandler,portHandler); 
 
-  // Vi.  Homing Dynamixel Motors[Joint2,3] using Dynamixel SDK
- HomingDynamixelProfilesSDK(groupSyncWrite_GP_A_V_LED, groupSyncWrite_GREEN_LED, groupSyncRead_PP_M_MS, packetHandler,portHandler); 
- delay(1000);
-/*
-  // Add parameter storage for Dynamixel#1 present position value
-  dxl_addparam_result = groupSyncReadPresentPos.addParam(DXL1_ID);
-  if (dxl_addparam_result != true)
-  {
-    Serial.print("[ID:"); Serial.print(DXL1_ID); Serial.println("groupSyncRead addparam failed");
-    return;
-  }
+  // VI.  Homing Dynamixel Motors[Joint2,3] using Dynamixel SDK
+  Serial.println("Started Homing Dynamixels");
+  HomingDynamixelProfilesSDK(groupSyncWrite_GP_A_V_LED, groupSyncWrite_GREEN_LED, groupSyncRead_PP_M_MS, packetHandler, portHandler);
+  Serial.println("Finished Homing Dynamixels");
+  delay(1000);
 
-  // Add parameter storage for Dynamixel#2 present position value
-  dxl_addparam_result = groupSyncReadPresentPos.addParam(DXL2_ID);
-  if (dxl_addparam_result != true)
-  {
-    Serial.print("[ID:"); Serial.print(DXL2_ID); Serial.println("groupSyncRead addparam failed");
-    return;
-  }
-*/
+  // VII. SImple P2P Motion StepperNema34 + 2 Dynamixels
+  ///*
+  int32_t DxlInitPos = 0;
+  int32_t DxlGoalPosition = 150000;
+  int32_t DxlVmax = 1000;
+  int32_t DxlAmax = 1000;
+  float StpInitPos = 0;
+  //double StpGoalPosition = 0.25*6.28318531;
+  float StpGoalPosition = 0.25*6.28312;
+  float StpVmax = 10.0000;
+  float StpAmax = 1.0000;
+  uint8_t MotorsIDs[] = {DXL1_ID, DXL2_ID, STP_ID};
+  int32_t DxlTrapzProfParams[] = {DxlInitPos, DxlGoalPosition, DxlVmax, DxlAmax};
+  float   StpTrapzProfParams[] = {StpInitPos, StpGoalPosition, StpVmax, StpAmax};
+  int MotorsIds_size = 3;
+  int TrapzProfParams_size =4;
 
-/*
-  while(1)
-  {
-    Serial.print("Press any key to continue! (or press q to quit!)\n");
-    if (getch() == 'q')
-      break;
+  // Simple Sync Stepper-Dynamixel motor for P2P motion:
+  SimpleSyncP2P_TrapzVelProf_SDK(MotorsIDs, MotorsIds_size, DxlTrapzProfParams, StpTrapzProfParams, TrapzProfParams_size, groupSyncWrite_GP_A_V_LED, groupSyncRead_PP_M_MS, packetHandler, portHandler);
+  //*/
 
-    // Allocate goal position value into byte array
-    param_goal_position[0] = DXL_LOBYTE(DXL_LOWORD(dxl_goal_position[index]));
-    param_goal_position[1] = DXL_HIBYTE(DXL_LOWORD(dxl_goal_position[index]));
-    param_goal_position[2] = DXL_LOBYTE(DXL_HIWORD(dxl_goal_position[index]));
-    param_goal_position[3] = DXL_HIBYTE(DXL_HIWORD(dxl_goal_position[index]));
-
-    // Add Dynamixel#1 goal position value to the Syncwrite storage
-    dxl_addparam_result = groupSyncWriteGoalPos.addParam(DXL1_ID, param_goal_position);
-    if (dxl_addparam_result != true)
-    {
-      Serial.print("[ID:"); Serial.print(DXL1_ID); Serial.println("groupSyncWrite addparam failed");
-      return;
-    }
-
-    // Add Dynamixel#2 goal position value to the Syncwrite parameter storage
-    dxl_addparam_result = groupSyncWriteGoalPos.addParam(DXL2_ID, param_goal_position);
-    if (dxl_addparam_result != true)
-    {
-      Serial.print("[ID:"); Serial.print(DXL2_ID); Serial.println("groupSyncWrite addparam failed");
-      return;
-    }
-
-    // Syncwrite goal position
-    dxl_comm_result = groupSyncWriteGoalPos.txPacket();
-    if (dxl_comm_result != COMM_SUCCESS) Serial.print(packetHandler->getTxRxResult(dxl_comm_result));
-
-    // Clear syncwrite parameter storage
-    groupSyncWriteGoalPos.clearParam();
-
-    do
-    {
-      // Syncread present position
-      dxl_comm_result = groupSyncReadPresentPos.txRxPacket();
-      if (dxl_comm_result != COMM_SUCCESS) Serial.print(packetHandler->getTxRxResult(dxl_comm_result));
-
-      // Check if groupsyncread data of Dynamixel#1 is available
-      groupSyncReadPresentPos.isAvailable(DXL1_ID, ADDR_PRO_PRESENT_POSITION, LEN_PRO_PRESENT_POSITION);
-      if (dxl_addparam_result != true)
-      {dodo
-        Serial.print("[ID:"); Serial.print(DXL1_ID); Serial.println("groupSyncRead getdata failed");
-        return;
-      }
-
-      // Check if groupsyncread data of Dynamixel#2 is available
-      groupSyncReadPresentPos.isAvailable(DXL2_ID, ADDR_PRO_PRESENT_POSITION, LEN_PRO_PRESENT_POSITION);
-      if (dxl_addparam_result != true)
-      {
-        Serial.print("[ID:"); Serial.print(DXL2_ID); Serial.println("groupSyncRead getdata failed");
-        return;
-      }
-
-      // Get Dynamixel#1 present position value
-      dxl1_present_position = groupSyncReadPresentPos.getData(DXL1_ID, ADDR_PRO_PRESENT_POSITION, LEN_PRO_PRESENT_POSITION);
-
-      // Get Dynamixel#2 present position value
-      dxl2_present_position = groupSyncReadPresentPos.getData(DXL2_ID, ADDR_PRO_PRESENT_POSITION, LEN_PRO_PRESENT_POSITION);
-
-      Serial.print("[ID:"); Serial.print(DXL1_ID);
-      Serial.print("] GoalPos:"); Serial.print(dxl_goal_position[index]);
-      Serial.print("  PresPos:"); Serial.print(dxl1_present_position);
-      Serial.print(" [ID:"); Serial.print(DXL2_ID);
-      Serial.print("] GoalPos:"); Serial.print(dxl_goal_position[index]);
-      Serial.print("  PresPos:"); Serial.print(dxl2_present_position);
-      Serial.println(" ");
-
-    }while((abs(dxl_goal_position[index] - dxl1_present_position) > DXL_MOVING_STATUS_THRESHOLD) || (abs(dxl_goal_position[index] - dxl2_present_position) > DXL_MOVING_STATUS_THRESHOLD));
-
-    // Change goal position
-    if (index == 0)
-    {
-      index = 1;
-    }
-    else
-    {
-      index = 0;
-    }
-  } */ //here comment for while(1) 
-
-  
-/*
   // Disable Dynamixel#1 Torque
   dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, DXL1_ID, ADDR_PRO_TORQUE_ENABLE, TORQUE_DISABLE, &dxl_error);
   if (dxl_comm_result != COMM_SUCCESS)
@@ -445,7 +367,6 @@ void setup()
   {
     Serial.print(packetHandler->getRxPacketError(dxl_error));
   }
-*/
 
   // Close port
   portHandler->closePort();
@@ -878,7 +799,7 @@ for(int id_count = 0; id_count <2; id_count++){
 
       // V. Allocate params for Write from Byte Array
       int32_t dxl_home_position = 0;
-      int32_t dxl_home_velocity = 1000;                                            // Homes with HALF of MAX Velocity
+      int32_t dxl_home_velocity = 2000;                                            // Homes with HALF of MAX Velocity
       int32_t dxl_home_acceleration = 5000;                                        // Homes with FULL Acceleration
 
       param_indirect_data_for_write[0] = DXL_LOBYTE(DXL_LOWORD(dxl_home_position));
@@ -914,18 +835,17 @@ for(int id_count = 0; id_count <2; id_count++){
 
       // VII. Syncwrite Packet is sent to Dynamixels
       dxl_comm_result = groupSyncWrite_GP_A_V_LED.txPacket();
-      if (dxl_comm_result != COMM_SUCCESS){
+      /*if (dxl_comm_result != COMM_SUCCESS){
        Serial.print(packetHandler->getTxRxResult(dxl_comm_result));
       }else{
-        Serial.println("Dynamixels  Homing...");
-      }
+       Serial.println("Dynamixels  Homing...");
+      }*/
 
       // VIII. Clear syncwrite parameter storage
       groupSyncWrite_GP_A_V_LED.clearParam();
 
 
       // IX. EXECUTING AND READING
-      int k=0;
       do
       {
       // IX.a. Syncread present position from indirectdata2
@@ -967,9 +887,7 @@ for(int id_count = 0; id_count <2; id_count++){
 
       Serial.printf("[Dynamixel Motor ID:%03d] GoalPos:%d  PresPos:%d  IsMoving:%d \n", dxl_id[0], dxl_home_position, dxl_present_position[0], dxl_moving[0]);
       Serial.printf("[Dynamixel Motor ID:%03d] GoalPos:%d  PresPos:%d  IsMoving:%d \n", dxl_id[1], dxl_home_position, dxl_present_position[1], dxl_moving[1]);
-      k++;
-      Serial.println(k);
-      //}while(k<1000);
+      Serial.println("Dynamixels  Homing... Please Wait... ");
       }while(abs(dxl_home_position - dxl_present_position[0]) > DXL_MOVING_STATUS_THRESHOLD);
 
   // X.1.1 Turn on Green LED
@@ -1019,3 +937,541 @@ for(int id_count = 0; id_count <2; id_count++){
 
   return 0;
 } // END OF FUNCTION
+
+// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++//
+// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++//
+
+
+// Function
+bool SimpleSyncP2P_TrapzVelProf_SDK( uint8_t *MotorsIDs, int MotorsIds_size, int32_t *DxlTrapzProfParams, float *StpTrapzProfParams, int TrapzProfParams_size, dynamixel::GroupSyncWrite groupSyncWrite_GP_A_V_LED, dynamixel::GroupSyncRead groupSyncRead_PP_M_MS, dynamixel::PacketHandler *packetHandler, dynamixel::PortHandler *portHandler){
+    time_now_millis = millis();
+
+    /* 
+     * I.
+     * Dynamixel Initialization 
+     * Here only Dxl Position change is considered for position status monitoring
+     * DxlTimeExec is calculated only for 1 motor since Sunc is used!
+     */
+    unsigned long t1 = (600*DxlTrapzProfParams[2])/DxlTrapzProfParams[3];
+    int32_t Dpos = abs(DxlTrapzProfParams[1]-DxlTrapzProfParams[0]);
+    unsigned long t2 = (5.97701241*Dpos)/DxlTrapzProfParams[2];
+    unsigned long DxlTimeExec = t1+t2;                                              // Time Units [millisecs]
+    Serial.print("DxlTimeExec[millisecs]="); Serial.println(DxlTimeExec);
+    int32_t DxlPresentPosition = 0;                                                 // Dynamixel is previously Homed!
+    bool result = false;
+    const char *log;
+    //int32_t get_data = 0;
+
+    /* 
+     * II.
+     * Stepper Initialization
+     * Checks for Stepper Trapezoidal profile
+     * Based on trapzPreAssignedVelAcceleP2P.cpp
+     */
+    float a  = ( 2 * pi ) / (  spr );                                                   // Stepper Motor Step Angle(Angular Position of Motor shaft)[rad]
+    float ag = ( 2 * pi ) / ( GEAR_FACTOR * spr );                                      // Geared Motor Step Angle(Angular Position of Output shaft of Gearbox )[rad]
+    Serial.print("Angle per step(a) = "); Serial.print(ag, 6); Serial.print(" [rad] "); 
+    float h  = StpTrapzProfParams[1]-StpTrapzProfParams[0];                             // Calculate displacement in [rad]
+    //h = abs(h);                                                                       // ...
+    float h_step = round( h / ag );                                                     // Calculate displacement in [steps]
+    Serial.print("Total number of Stepper Motor steps(h_step)  = "); Serial.print(h_step); Serial.print(" [steps] "); 
+
+    long max_s_lim = pow(StpTrapzProfParams[2],2) / (2 * ag * StpTrapzProfParams[3] * 100 );  // Number of needed steps to accelerate to desired SPEED
+    long accel_lim = h_step * StpTrapzProfParams[3] / ( 2 *StpTrapzProfParams[3]  );          // Number of needed steps to accelerate to desired ACCELERATION
+     
+    float Ta; float T;
+    long  nmov_Ta;
+    long  nmov_Td;
+    bool segmentExists;
+    long nmov_linseg;
+    if(max_s_lim <= accel_lim)                                                           // Trapezoidal Profile => Reaches max Speed with MAX Acceleration
+    {
+      Serial.println("Trapezoidal Profile!"); segmentExists = true;
+      
+      // Calculate Theoretical Time Execution Values!
+      Ta = StpTrapzProfParams[2] / StpTrapzProfParams[3];
+      Serial.print("Acceleration Phase Time(Ta) = "); Serial.print(Ta, 6); Serial.println(" [sec] ");                         // Display accelration time
+      T  = ( h*StpTrapzProfParams[3]+pow(StpTrapzProfParams[2],2) ) / ( StpTrapzProfParams[3]*StpTrapzProfParams[2] );        // Calculate total execution time
+      Serial.print("Total Execution Time(T) = "); Serial.print(T, 6); Serial.println(" [sec] ");                              // Display accelration time
+
+      nmov_Ta =  max_s_lim;                                                                                                   // Steps of Acceleration Phase;
+      nmov_linseg = h_step - 2 * nmov_Ta;                                                                                     // Steps of liner segment if Accel=Deccel
+      nmov_Td = max_s_lim ;
+      Serial.print("Steps of Accel/Deccel  Phase(nmov_Ta/nmov_Td) = "); Serial.print(nmov_Ta); Serial.println(" [steps] ");
+      Serial.print("Steps of Constant Velocity Phase(nmov_linseg) = "); Serial.print(nmov_linseg); Serial.println(" [steps] ");
+    } 
+    else
+    {
+      Serial.println("Triangular Profile! Vmax is recalculated!"); segmentExists = false;
+
+      // Calculate Theoretical Time Execution Values!
+      Ta = sqrt(h/StpTrapzProfParams[3]);
+      Serial.print("Acceleration Phase Time(Ta) = "); Serial.print(Ta, 6); Serial.println(" [sec] ");                           // Display accelration time
+      T  = 2*Ta;
+      Serial.print("Total Execution Time(T) = "); Serial.print(T, 6); Serial.println(" [sec] ");                                // Display accelration time
+      float nVmax = StpTrapzProfParams[3]*Ta;
+      Serial.printf("New maximum Velocity: %f \n",nVmax);
+      
+      nmov_Ta = max_s_lim;
+      nmov_linseg = 0;
+      nmov_Td = h_step-nmov_Ta;
+      Serial.print("Steps of Accel  Phase(nmov_Ta) = "); Serial.print(nmov_Ta); Serial.println(" [steps] ");
+      Serial.print("Steps of Ct Velocity Phase(nmov_linseg) = "); Serial.print(nmov_linseg); Serial.println(" [steps] ");
+      Serial.print("Steps of Deccel  Phase(nmov_Td) = "); Serial.print(nmov_Ta); Serial.println(" [steps] ");
+    }
+
+    long StpPresentPosition = 0;                                                                    // Moves motor until specified number of steps is reached
+    //float delta_t = 0.0001;
+    float delta_t =  0.676 * ft *(2*ag/StpTrapzProfParams[3]);                                     // c0 with ignored inaccuracy factor [sec]
+    Serial.print("Initial Step Delay Time(c0) = "); Serial.print(delta_t,6); Serial.println(" [sec] ");
+    delay(10000);
+    
+    float new_delta_t;
+    unsigned long rest  = 0;
+    long accel_count = 0; 
+    long ctVel_count = 0;
+    long decel_count = -nmov_Td;                                                    // counter of steps executed for Acceleration Phase
+
+/*
+ * III. Initiate Sync write for Dynamixels using Indirect Addressing 
+ */
+// FOR loop for DXL_ID starts here...
+        for(int id_count = 0; id_count <2; id_count++){
+          // III.1. Disable Dynamixel Torque because Indirect address would not be accessible when the torque is already enabled!
+          dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, dxl_id[id_count], ADDR_PRO_TORQUE_ENABLE, TORQUE_DISABLE, &dxl_error);
+          if (dxl_comm_result != COMM_SUCCESS)
+          {
+            packetHandler->getTxRxResult(dxl_comm_result);
+          }
+          else if (dxl_error != 0)
+          {
+            packetHandler->getRxPacketError(dxl_error);
+          }
+          else
+          {
+            printf("DXL has been successfully connected \n");
+          }
+
+
+        // III.2 Indirect Parameter Storage for WRITE
+
+          // III.2.1. Allocate goal position value into byte array
+          dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, dxl_id[id_count], ADDR_PRO_INDIRECTADDRESS_FOR_WRITE + 0, ADDR_PRO_GOAL_POSITION + 0, &dxl_error);
+          if (dxl_comm_result != COMM_SUCCESS)
+          {
+            packetHandler->getTxRxResult(dxl_comm_result);
+          }
+          else if (dxl_error != 0)
+          {
+            packetHandler->getRxPacketError(dxl_error);
+          }
+          dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, dxl_id[id_count], ADDR_PRO_INDIRECTADDRESS_FOR_WRITE + 2, ADDR_PRO_GOAL_POSITION + 1, &dxl_error);
+          if (dxl_comm_result != COMM_SUCCESS)
+          {
+            packetHandler->getTxRxResult(dxl_comm_result);
+          }
+          else if (dxl_error != 0)
+          {
+            packetHandler->getRxPacketError(dxl_error);
+          }
+
+          dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, dxl_id[id_count], ADDR_PRO_INDIRECTADDRESS_FOR_WRITE + 4, ADDR_PRO_GOAL_POSITION + 2, &dxl_error);
+          if (dxl_comm_result != COMM_SUCCESS)
+          {
+            packetHandler->getTxRxResult(dxl_comm_result);
+          }
+          else if (dxl_error != 0)
+          {
+            packetHandler->getRxPacketError(dxl_error);
+          }
+
+          dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, dxl_id[id_count], ADDR_PRO_INDIRECTADDRESS_FOR_WRITE + 6, ADDR_PRO_GOAL_POSITION + 3, &dxl_error);
+          if (dxl_comm_result != COMM_SUCCESS)
+          {
+            packetHandler->getTxRxResult(dxl_comm_result);
+          }
+          else if (dxl_error != 0)
+          {
+            packetHandler->getRxPacketError(dxl_error);
+          }
+
+          // III.2.2. Allocate Profile Acceleration value into byte array
+          dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, dxl_id[id_count], ADDR_PRO_INDIRECTADDRESS_FOR_WRITE + 8, ADDR_PRO_PROF_ACCEL + 0, &dxl_error);
+          if (dxl_comm_result != COMM_SUCCESS)
+          {
+            packetHandler->getTxRxResult(dxl_comm_result);
+          }
+          else if (dxl_error != 0)
+          {
+            packetHandler->getRxPacketError(dxl_error);
+          }
+          dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, dxl_id[id_count], ADDR_PRO_INDIRECTADDRESS_FOR_WRITE + 10, ADDR_PRO_PROF_ACCEL + 1, &dxl_error);
+          if (dxl_comm_result != COMM_SUCCESS)
+          {
+            packetHandler->getTxRxResult(dxl_comm_result);
+          }
+          else if (dxl_error != 0)
+          {
+            packetHandler->getRxPacketError(dxl_error);
+          }
+
+          dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, dxl_id[id_count], ADDR_PRO_INDIRECTADDRESS_FOR_WRITE + 12, ADDR_PRO_PROF_ACCEL + 2, &dxl_error);
+          if (dxl_comm_result != COMM_SUCCESS)
+          {
+            packetHandler->getTxRxResult(dxl_comm_result);
+          }
+          else if (dxl_error != 0)
+          {
+            packetHandler->getRxPacketError(dxl_error);
+          }
+
+          dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, dxl_id[id_count], ADDR_PRO_INDIRECTADDRESS_FOR_WRITE + 14, ADDR_PRO_PROF_ACCEL + 3, &dxl_error);
+          if (dxl_comm_result != COMM_SUCCESS)
+          {
+            packetHandler->getTxRxResult(dxl_comm_result);
+          }
+          else if (dxl_error != 0)
+          {
+            packetHandler->getRxPacketError(dxl_error);
+          }
+
+          // III.2.3. Allocate Profile Velocity value into byte array
+          dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, dxl_id[id_count], ADDR_PRO_INDIRECTADDRESS_FOR_WRITE + 16, ADDR_PRO_PROF_VEL + 0, &dxl_error);
+          if (dxl_comm_result != COMM_SUCCESS)
+          {
+            packetHandler->getTxRxResult(dxl_comm_result);
+          }
+          else if (dxl_error != 0)
+          {
+            packetHandler->getRxPacketError(dxl_error);
+          }
+          dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, dxl_id[id_count], ADDR_PRO_INDIRECTADDRESS_FOR_WRITE + 18, ADDR_PRO_PROF_VEL + 1, &dxl_error);
+          if (dxl_comm_result != COMM_SUCCESS)
+          {
+            packetHandler->getTxRxResult(dxl_comm_result);
+          }
+          else if (dxl_error != 0)
+          {
+            packetHandler->getRxPacketError(dxl_error);
+          }
+
+          dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, dxl_id[id_count], ADDR_PRO_INDIRECTADDRESS_FOR_WRITE + 20, ADDR_PRO_PROF_VEL + 2, &dxl_error);
+          if (dxl_comm_result != COMM_SUCCESS)
+          {
+            packetHandler->getTxRxResult(dxl_comm_result);
+          }
+          else if (dxl_error != 0)
+          {
+            packetHandler->getRxPacketError(dxl_error);
+          }
+
+          dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, dxl_id[id_count], ADDR_PRO_INDIRECTADDRESS_FOR_WRITE + 22, ADDR_PRO_PROF_VEL + 3, &dxl_error);
+          if (dxl_comm_result != COMM_SUCCESS)
+          {
+            packetHandler->getTxRxResult(dxl_comm_result);
+          }
+          else if (dxl_error != 0)
+          {
+            packetHandler->getRxPacketError(dxl_error);
+          }
+
+          // III.2.3. Allocate LEDs value into byte array
+          dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, dxl_id[id_count], ADDR_PRO_INDIRECTADDRESS_FOR_WRITE + 24, ADDR_PRO_LED_BLUE, &dxl_error);
+          if (dxl_comm_result != COMM_SUCCESS)
+          {
+            packetHandler->getTxRxResult(dxl_comm_result);
+          }
+          else if (dxl_error != 0)
+          {
+            packetHandler->getRxPacketError(dxl_error);
+          }
+          dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, dxl_id[id_count], ADDR_PRO_INDIRECTADDRESS_FOR_WRITE + 26, ADDR_PRO_LED_GREEN, &dxl_error);
+          if (dxl_comm_result != COMM_SUCCESS)
+          {
+            packetHandler->getTxRxResult(dxl_comm_result);
+          }
+          else if (dxl_error != 0)
+          {
+            packetHandler->getRxPacketError(dxl_error);
+          }
+
+          // III.3. Indirect Parameter Storage for READ
+          dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, dxl_id[id_count], ADDR_PRO_INDIRECTADDRESS_FOR_READ + 0, ADDR_PRO_PRESENT_POSITION + 0, &dxl_error);
+          if (dxl_comm_result != COMM_SUCCESS)
+          {
+            packetHandler->getTxRxResult(dxl_comm_result);
+          }
+          else if (dxl_error != 0)
+          {
+            packetHandler->getRxPacketError(dxl_error);
+          }
+
+          dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, dxl_id[id_count], ADDR_PRO_INDIRECTADDRESS_FOR_READ + 2, ADDR_PRO_PRESENT_POSITION + 1, &dxl_error);
+          if (dxl_comm_result != COMM_SUCCESS)
+          {
+            packetHandler->getTxRxResult(dxl_comm_result);
+          }
+          else if (dxl_error != 0)
+          {
+            packetHandler->getRxPacketError(dxl_error);
+          }
+
+          dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, dxl_id[id_count], ADDR_PRO_INDIRECTADDRESS_FOR_READ + 4, ADDR_PRO_PRESENT_POSITION + 2, &dxl_error);
+          if (dxl_comm_result != COMM_SUCCESS)
+          {
+            packetHandler->getTxRxResult(dxl_comm_result);
+          }
+          else if (dxl_error != 0)
+          {
+            packetHandler->getRxPacketError(dxl_error);
+          }
+
+          dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, dxl_id[id_count], ADDR_PRO_INDIRECTADDRESS_FOR_READ + 6, ADDR_PRO_PRESENT_POSITION + 3, &dxl_error);
+          if (dxl_comm_result != COMM_SUCCESS)
+          {
+            packetHandler->getTxRxResult(dxl_comm_result);
+          }
+          else if (dxl_error != 0)
+          {
+            packetHandler->getRxPacketError(dxl_error);
+          }
+
+          dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, dxl_id[id_count], ADDR_PRO_INDIRECTADDRESS_FOR_READ + 8, ADDR_PRO_MOVING, &dxl_error);
+          if (dxl_comm_result != COMM_SUCCESS)
+          {
+            packetHandler->getTxRxResult(dxl_comm_result);
+          }
+          else if (dxl_error != 0)
+          {
+            packetHandler->getRxPacketError(dxl_error);
+          }
+
+          dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, dxl_id[id_count], ADDR_PRO_INDIRECTADDRESS_FOR_READ + 10, ADDR_PRO_MOVING_STATUS, &dxl_error);
+          if (dxl_comm_result != COMM_SUCCESS)
+          {
+            packetHandler->getTxRxResult(dxl_comm_result);
+          }
+          else if (dxl_error != 0)
+          {
+            packetHandler->getRxPacketError(dxl_error);
+          }
+
+      // FINISHED WRITING IN EEPROM MEMORY => TORQUE CAN BE ENABLED
+
+        // IV. Enable DXL Torque
+        dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, dxl_id[id_count], ADDR_PRO_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
+        if (dxl_comm_result != COMM_SUCCESS)
+        {
+          packetHandler->getTxRxResult(dxl_comm_result);
+        }
+        else if (dxl_error != 0)
+        {
+          packetHandler->getRxPacketError(dxl_error);
+        }
+        // Add parameter storage for the present position value
+        dxl_addparam_result = groupSyncRead_PP_M_MS.addParam(dxl_id[id_count]);
+        if (dxl_addparam_result != true)
+        {
+          fprintf(stderr, "[ID:%03d] groupSyncRead addparam failed\n", dxl_id[id_count]);
+          return 0;
+        }
+
+      }
+      // FOR loop for DXL_ID ends here...
+
+      // V. Allocate params for Write from Byte Array, arguments are given from user in function call
+      param_indirect_data_for_write[0] = DXL_LOBYTE(DXL_LOWORD(DxlTrapzProfParams[1]));
+      param_indirect_data_for_write[1] = DXL_HIBYTE(DXL_LOWORD(DxlTrapzProfParams[1]));
+      param_indirect_data_for_write[2] = DXL_LOBYTE(DXL_HIWORD(DxlTrapzProfParams[1]));
+      param_indirect_data_for_write[3] = DXL_HIBYTE(DXL_HIWORD(DxlTrapzProfParams[1]));
+      param_indirect_data_for_write[4] = DXL_HIBYTE(DXL_HIWORD(DxlTrapzProfParams[2]));
+      param_indirect_data_for_write[5] = DXL_HIBYTE(DXL_HIWORD(DxlTrapzProfParams[2]));
+      param_indirect_data_for_write[6] = DXL_HIBYTE(DXL_HIWORD(DxlTrapzProfParams[2]));
+      param_indirect_data_for_write[7] = DXL_HIBYTE(DXL_HIWORD(DxlTrapzProfParams[2]));
+      param_indirect_data_for_write[8] = DXL_HIBYTE(DXL_HIWORD(DxlTrapzProfParams[3]));
+      param_indirect_data_for_write[9] = DXL_HIBYTE(DXL_HIWORD(DxlTrapzProfParams[3]));
+      param_indirect_data_for_write[10] = DXL_HIBYTE(DXL_HIWORD(DxlTrapzProfParams[3]));
+      param_indirect_data_for_write[11] = DXL_HIBYTE(DXL_HIWORD(DxlTrapzProfParams[3]));
+      param_indirect_data_for_write[12] = dxl_ledBLUE_value[1];
+      param_indirect_data_for_write[13] = dxl_ledGREEN_value[0];
+
+      // VI.a Add Dynamixel#1 WRITE values to the Syncwrite parameter storage
+      dxl_addparam_result = groupSyncWrite_GP_A_V_LED.addParam(DXL1_ID, param_indirect_data_for_write);
+      if (dxl_addparam_result != true)
+      {
+        Serial.print("[ID:"); Serial.print(DXL1_ID); Serial.println("] groupSyncWriteHomePos1 addparam failed");
+        return false;
+      }
+
+      // VI.b. Add Dynamixel#2 WRITE values to the Syncwrite parameter storage
+      dxl_addparam_result = groupSyncWrite_GP_A_V_LED.addParam(DXL2_ID, param_indirect_data_for_write);
+      if (dxl_addparam_result != true)
+      {
+        Serial.print("[ID:"); Serial.print(DXL2_ID); Serial.println("] groupSyncWriteHomePos2 addparam failed");
+        return false;
+      }
+
+      // VII. Syncwrite Packet is sent to Dynamixels
+      dxl_comm_result = groupSyncWrite_GP_A_V_LED.txPacket();
+      if (dxl_comm_result != COMM_SUCCESS){
+       Serial.print(packetHandler->getTxRxResult(dxl_comm_result));
+      }else{
+        Serial.println("Dynamixels  Moving...");
+      }
+
+      // VIII. Clear syncwrite parameter storage
+      groupSyncWrite_GP_A_V_LED.clearParam();
+
+
+      // IX. EXECUTING AND READING
+      do
+      {
+      // IX.aa. Move stepper using Trapz Vel Profile
+// =============================================================================================================================================
+          StpPresentPosition++;
+          // IV.b.1.I. Locate position in ramp
+
+          if(segmentExists)                                                                             // Linear Segment exists
+          {
+                Serial.println("Segment exists");                               
+                if(StpPresentPosition<nmov_Ta){
+                  Serial.println("Acceleration Phase");
+                  accel_count++;                                                                        // Acceleration Phase: delta_t -> minimizes
+                  new_delta_t =  delta_t - 0.5 * ( (2*delta_t+rest)/(4*accel_count+1) );                // c_n [sec]
+                  //new_rest = (2*delta_t + rest)*mod(4*accel_count+1);                                 // r_n
+                }else if( StpPresentPosition>nmov_Ta && StpPresentPosition<(nmov_Ta+nmov_linseg) ){     // Linear Segment: delta_t -> constant
+                  ctVel_count++;
+                  Serial.printf("Accel Phase: %ld \n",accel_count);
+                  Serial.println("Constant Velocity Phase");
+                  new_delta_t = delta_t;  
+                }
+                else{
+                  Serial.printf("CtVel Phase steps: %ld \n",ctVel_count);
+                  Serial.println("Decelleration Phase");
+                  decel_count++;                                                                        // Negative Value!
+                  Serial.println(decel_count);
+                  new_delta_t =  delta_t - 0.5 * ( (2*delta_t+rest)/(4*decel_count+1) );                // Deceleration Phase: delta_t -> maximizes [sec] 
+                }                                                                         
+          }
+          else
+          {                                                                                             // Linear Segment doesn't exist
+                Serial.println("Segment doesn't exist");
+                if(StpPresentPosition<nmov_Ta)                                                          // Acceleration Phase: delta_t -> minimizes
+                {
+                  Serial.println("Acceleration Phase");
+                  accel_count++;
+                  new_delta_t = delta_t - 0.5 * ((2*delta_t+rest)/(4*accel_count+1) );                           // c_n [sec]
+
+                }                                   
+                else{                                                                                   // Deceleration Phase: delta_t -> maximizes
+                  Serial.println("Decelleration Phase");
+                  decel_count++;                                                                        // Negative Value!
+                  new_delta_t = delta_t - 0.5 * ((2*delta_t+rest)/(4*decel_count+1) );                           // Deceleration Phase: delta_t -> maximizes [sec] 
+                }                                                                       
+          }
+          
+          Serial.printf("New step delay time[s]: %f \n",new_delta_t);
+          unsigned long new_delta_t_micros = (new_delta_t*1000000);
+          //unsigned long new_delta_t_micros = new_delta_t;
+          Serial.printf("New step delay time[micros]: %lu \n",new_delta_t_micros);
+          
+          // IV.b.1.II. Steps Motor with variable time delay step
+          singleStepVarDelay(new_delta_t_micros);       
+
+          // Updates time step delay for next step
+          delta_t = new_delta_t;
+            
+          Serial.print("StpPresentPosition="); Serial.println(StpPresentPosition);
+
+          // =============================================================================================================================================      
+///*
+      // IX.a. Syncread present position from indirectdata2
+          dxl_comm_result = groupSyncRead_PP_M_MS.txRxPacket();
+          if (dxl_comm_result != COMM_SUCCESS) packetHandler->getTxRxResult(dxl_comm_result);
+
+          // IX.b.1. Check if groupsyncread data of Dyanamixels is available
+          for(int id_count = 0; id_count <2; id_count++){
+                dxl_getdata_result = groupSyncRead_PP_M_MS.isAvailable(dxl_id[id_count], ADDR_PRO_INDIRECTDATA_FOR_READ, LEN_PRO_PRESENT_POSITION);
+                if (dxl_getdata_result != true)
+                {
+                  fprintf(stderr, "[ID:%03d] groupSyncRead getdata failed", dxl_id[id_count]);
+                  return 0;
+                }
+
+                dxl_getdata_result = groupSyncRead_PP_M_MS.isAvailable(dxl_id[id_count], ADDR_PRO_INDIRECTDATA_FOR_READ + LEN_PRO_PRESENT_POSITION, LEN_PRO_MOVING);
+                if (dxl_getdata_result != true)
+                {
+                  fprintf(stderr, "[ID:%03d] groupSyncRead getdata failed", dxl_id[id_count]);
+                  return 0;
+                }
+
+                dxl_getdata_result = groupSyncRead_PP_M_MS.isAvailable(dxl_id[id_count], ADDR_PRO_INDIRECTDATA_FOR_READ + LEN_PRO_PRESENT_POSITION + LEN_PRO_MOVING, LEN_PRO_MOVING_STATUS);
+                if (dxl_getdata_result != true)
+                {
+                  fprintf(stderr, "[ID:%03d] groupSyncRead getdata failed", dxl_id[id_count]);
+                  return 0;
+                }
+          }
+
+          // IX.b.2.Get Dynamixel values
+          for(int id_count = 0; id_count <2; id_count++){
+                dxl_present_position[id_count] = groupSyncRead_PP_M_MS.getData(dxl_id[id_count], ADDR_PRO_INDIRECTDATA_FOR_READ, LEN_PRO_PRESENT_POSITION);
+
+                dxl_moving[id_count] = groupSyncRead_PP_M_MS.getData(dxl_id[id_count], ADDR_PRO_INDIRECTDATA_FOR_READ + LEN_PRO_PRESENT_POSITION, LEN_PRO_MOVING);
+
+                dxl_moving_status[id_count] = groupSyncRead_PP_M_MS.getData(dxl_id[id_count], ADDR_PRO_INDIRECTDATA_FOR_READ + LEN_PRO_PRESENT_POSITION + LEN_PRO_MOVING, LEN_PRO_MOVING_STATUS);
+          }
+
+          Serial.printf("[Dynamixel Motor ID:%03d] GoalPos:%d  PresPos:%d  IsMoving:%d \n", dxl_id[0], DxlTrapzProfParams[1], dxl_present_position[0], dxl_moving[0]);
+          Serial.printf("[Dynamixel Motor ID:%03d] GoalPos:%d  PresPos:%d  IsMoving:%d \n", dxl_id[1], DxlTrapzProfParams[1], dxl_present_position[1], dxl_moving[1]);
+//*/
+      //}while(abs(dxl_home_position - dxl_present_position[0]) > DXL_MOVING_STATUS_THRESHOLD);
+      //}while(   (millis() < time_now_millis + DxlTimeExec)  );
+      }while( ( (abs(h_step - StpPresentPosition) != 0) ));
+
+  // X.1.1 Turn on Green LED
+    
+  // X.1.2 Disable Dynamixel#1 Torque
+  dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, DXL1_ID, ADDR_PRO_TORQUE_ENABLE, TORQUE_DISABLE, &dxl_error);
+  if (dxl_comm_result != COMM_SUCCESS)
+  {
+    packetHandler->getTxRxResult(dxl_comm_result);
+  }
+  else if (dxl_error != 0)
+  {
+    packetHandler->getRxPacketError(dxl_error);
+  }
+
+  // X.1.3. Disable Dynamixel#2 Torque
+  dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, DXL2_ID, ADDR_PRO_TORQUE_ENABLE, TORQUE_DISABLE, &dxl_error);
+  if (dxl_comm_result != COMM_SUCCESS)
+  {
+    packetHandler->getTxRxResult(dxl_comm_result);
+  }
+  else if (dxl_error != 0)
+  {
+    packetHandler->getRxPacketError(dxl_error);
+  }
+
+  // X.1.4 Close port
+  portHandler->closePort();
+
+  return 0;
+} // END OF FUNCTION
+
+
+// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++//
+// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++//
+
+
+void singleStepVarDelay(unsigned long delayTime) {
+  // Custom Stepping Function for Velocity-Acceleration Profiles 
+    unsigned long time_now_micros = micros();
+    digitalWrite(stepPin, HIGH);
+    while(micros() < time_now_micros + delayTime){}                   //wait approx. [μs]
+    digitalWrite(stepPin, LOW);
+} // END function singleStepVarDelay
+    
+
+// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++//
+// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++//
