@@ -12,7 +12,7 @@
 // Used Libraries
 #include <DynamixelSDK.h>
 #include <AccelStepper.h>
-//#include <DynamixelWorkbench.h>
+#include <DynamixelWorkbench.h>
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -37,6 +37,9 @@
 #define ADDR_PRO_LED_BLUE                       515
 #define ADDR_PRO_LED_GREEN                      514
 #define ADDR_PRO_RETURN_DELAY_TIME              9
+#define ADDR_PRO_BAUDRATE                       8
+#define ADDR_PRO_ID                             7
+#define ADDR_PRO_SECONDARY_ID                   12
 
 // Data Byte Length
 #define LEN_PRO_TORQUE_ENABLE                   1
@@ -54,17 +57,19 @@
 #define LEN_PRO_MOVING_STATUS                   1 
 #define LEN_PRO_LED                             1
 #define LEN_PRO_RETURN_DELAY_TIME               1
-#define LEN_PRO_INDIRECTDATA_FOR_WRITE          14                   // 4*3 for pos/vel/accel and 1+1 for leds
-#define LEN_PRO_INDIRECTDATA_FOR_READ           6                    // 4 for present position and 1+1 for dxl_moving
+#define LEN_PRO_BAUDRATE                        1
+#define LEN_PRO_ID                              1
+#define LEN_PRO_SECONDARY_ID                    1
+#define LEN_PRO_INDIRECTDATA_FOR_WRITE          14          // 4*3 for pos/vel/accel and 1+1 for leds
+#define LEN_PRO_INDIRECTDATA_FOR_READ           6           // 4 for present position and 1+1 for dxl_moving
 
-  
 // Protocol version
 #define PROTOCOL_VERSION                2.0                 // See which protocol version is used in the Dynamixel
 
 // Default setting
 #define DXL1_ID                         1                   // Dynamixel#1 ID: 1
 #define DXL2_ID                         2                   // Dynamixel#2 ID: 2
-#define BAUDRATE                        57600
+#define BAUDRATE                        2000000
 #define DEVICENAME                      "/dev/ttyACM0"   // This definition only has a symbolic meaning and does not affect to any functionality
 #define CMD_SERIAL                      Serial
 #define ESC_ASCII_VALUE                 0x1b
@@ -119,7 +124,8 @@ uint8_t param_indirect_data_for_write[LEN_PRO_INDIRECTDATA_FOR_WRITE];
 uint8_t param_led_for_write;
 uint8_t dxl_ledBLUE_value[2] = {0, 255};                                                  // Dynamixel LED value
 uint8_t dxl_ledGREEN_value[2] = {0, 255};                                                 // Dynamixel LED value
-uint32_t dxl_present_position[2];                                                          // Present position
+uint32_t dxl_present_position[2];                                                         // Present position
+uint32_t dxl_present_position1;                                                           // Present position
   
 // Set Desired Limit Values for Control Table Items
 int dxl_accel_limit = 1000;
@@ -135,6 +141,7 @@ uint8_t dxl_error = 0;                                                          
 int32_t dxl1_present_position = 0, dxl2_present_position = 0;                              // Present position
 
 
+DynamixelWorkbench dxl_wb;
 
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++//
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++//
@@ -168,11 +175,17 @@ void setup()
   dynamixel::GroupSyncWrite groupSyncWrite_GREEN_LED(portHandler, packetHandler, ADDR_PRO_LED_GREEN, LEN_PRO_LED);
   dynamixel::GroupSyncWrite groupSyncWrite_TORQUE_ENABLE(portHandler, packetHandler, ADDR_PRO_TORQUE_ENABLE, LEN_PRO_TORQUE_ENABLE);
   dynamixel::GroupSyncWrite groupSyncWrite_RETURN_DELAY_TIME(portHandler, packetHandler, ADDR_PRO_RETURN_DELAY_TIME, LEN_PRO_RETURN_DELAY_TIME);
+  dynamixel::GroupSyncWrite groupSyncWrite_BAUDRATE(portHandler, packetHandler, ADDR_PRO_BAUDRATE, LEN_PRO_BAUDRATE);
+  dynamixel::GroupSyncWrite groupSyncWrite_ID(portHandler, packetHandler, ADDR_PRO_ID, LEN_PRO_ID);
+  dynamixel::GroupSyncWrite groupSyncWrite_SECONDARY_ID(portHandler, packetHandler, ADDR_PRO_SECONDARY_ID, LEN_PRO_SECONDARY_ID);
 
   // Initialize Groupsyncread instance for Present Position
   dynamixel::GroupSyncRead groupSyncReadPresentPos(portHandler, packetHandler, ADDR_PRO_PRESENT_POSITION, LEN_PRO_PRESENT_POSITION);
   dynamixel::GroupSyncRead groupSyncRead_PP_M_MS(portHandler, packetHandler, ADDR_PRO_INDIRECTDATA_FOR_READ, LEN_PRO_INDIRECTDATA_FOR_READ);
-  
+
+  // Initialize GroupBulkRead instance
+  dynamixel::GroupBulkRead groupBulkRead(portHandler, packetHandler);
+    
   // I. Variables intialization
   const char *log;
   bool result = false;
@@ -201,173 +214,168 @@ void setup()
    * III. Dynamixel Motors are tested
    */
 
-  // III.a. Open port
-  if (portHandler->openPort())
-  {
-    Serial.print("Succeeded to open the port!\n");
-  }
-  else
-  {
-    Serial.print("Failed to open the port!\n");
-    return;
-  }
-
-  // III.b.1 Set port baudrate
-  if (portHandler->setBaudRate(BAUDRATE))
-  {
-    int achievedBaudrate = portHandler->getBaudRate();
-    Serial.print("Succeeded to change the baudrate! New Baudrate is: "); Serial.println(achievedBaudrate);
-  }
-  else
-  {
-    Serial.print("Failed to change the baudrate!\n");
-    return;
-  }
-
-    // III.b.1 Test for sync write torque_on
+    // III.a. Open port
+    Serial.println("Opening port");
+    if (portHandler->openPort())
+    {
+      Serial.print("Succeeded to open the port!\n");
+    }
+    else
+    {
+      Serial.print("Failed to open the port!\n");
+      return;
+    }
+  
+    // III.b.1 Set port baudrate
+    Serial.println("Setting port BAUDRATE");
+    if (portHandler->setBaudRate(BAUDRATE))
+    {
+      int achievedBaudrate = portHandler->getBaudRate();
+      Serial.print("Succeeded to change the baudrate! New Baudrate is: "); Serial.println(achievedBaudrate);
+    }
+    else
+    {
+      Serial.print("Failed to change the baudrate!\n");
+      return;
+    }
+/*
+    // III.b.2 Disable Dynamixels torque to access EEPROM Area
     uint8_t param_torque_enable = 0;
-
-    dxl_addparam_result = groupSyncWrite_TORQUE_ENABLE.addParam(DXL1_ID, &param_torque_enable);
-    if (dxl_addparam_result != true)
+    Serial.println("Setting Dynamixels TORQUE");
+    return_function_state = syncSetTorque(dxl_id, 2, param_torque_enable, groupSyncWrite_TORQUE_ENABLE, packetHandler);
+    if (return_function_state == true)
     {
-      Serial.print("[ID:"); Serial.print(DXL1_ID); Serial.println("groupSyncWrite_TORQUE_ENABLE.addParam failed");
-    }
-
-    dxl_addparam_result = groupSyncWrite_TORQUE_ENABLE.addParam(DXL2_ID, &param_torque_enable);
-    if (dxl_addparam_result != true)
-    {
-      Serial.print("[ID:"); Serial.print(DXL2_ID); Serial.println("groupSyncWrite_TORQUE_ENABLE.addParam failed");
-    }
-
-    dxl_comm_result = groupSyncWrite_TORQUE_ENABLE.txPacket();
-    if (dxl_comm_result != COMM_SUCCESS)
-    {
-      Serial.print(packetHandler->getTxRxResult(dxl_comm_result)); Serial.println("gamw1");
+      Serial.println("SUCCESS");
     }
     else
     {
-      Serial.println("Torque DISABLED");
+      Serial.println("FAILED");
     }
-    
-    groupSyncWrite_TORQUE_ENABLE.clearParam();
+*/    
+    // III.b.3 Set Dynamixels Baudrate
+    uint8_t dxl_baudrate_range = 4;                                                                                 // 4 -> 2000000
+    Serial.println("Setting Dynamixels BAUDRATE");
+    return_function_state = syncSetBaudrate(dxl_id, 2, dxl_baudrate_range, groupSyncWrite_BAUDRATE, packetHandler);
+    if (return_function_state == true)
+    {
+      Serial.println("SUCCESS");
+    }
+    else
+    {
+      Serial.println("FAILED");
+    }
 
-  /// III.b.3 Set Return_Delay_Time for Dynamixels to minimum
+    // III.b.4 Set Return_Delay_Time for Dynamixels to minimum
     uint8_t param_return_delay_time = 10;
-
-    dxl_addparam_result = groupSyncWrite_RETURN_DELAY_TIME.addParam(DXL1_ID, &param_return_delay_time);
-    if (dxl_addparam_result != true)
+    Serial.println("Setting Dynamixels Return_Delay_Time");
+    return_function_state = syncSetReturnDelayTime(dxl_id, 2, param_return_delay_time, groupSyncWrite_RETURN_DELAY_TIME, packetHandler);
+    if (return_function_state == true)
     {
-      Serial.print("[ID:"); Serial.print(DXL1_ID); Serial.println("groupSyncWrite_RETURN_DELAY_TIME.addParam failed");
-    }
-
-    dxl_addparam_result = groupSyncWrite_RETURN_DELAY_TIME.addParam(DXL2_ID, &param_return_delay_time);
-    if (dxl_addparam_result != true)
-    {
-      Serial.print("[ID:"); Serial.print(DXL2_ID); Serial.println("groupSyncWrite_RETURN_DELAY_TIME.addParam failed");
-    }
-
-    dxl_comm_result = groupSyncWrite_RETURN_DELAY_TIME.txPacket();
-    if (dxl_comm_result != COMM_SUCCESS)
-    {
-      Serial.print(packetHandler->getTxRxResult(dxl_comm_result)); Serial.println("gamw2");
+      Serial.println("SUCCESS");
     }
     else
     {
-      Serial.print("RETURN_DELAY_TIME set to: "); Serial.println(param_return_delay_time);
+      Serial.println("FAILED");
     }
-    
-    groupSyncWrite_RETURN_DELAY_TIME.clearParam();
+/*
+    // III.b.5 Set ID's for Dynamixels
+    uint8_t param_id_range = 1;
+    Serial.println("Setting Dynamixels ID's");
+    return_function_state = syncSetID(dxl_id, 2, param_id_range, groupSyncWrite_ID, packetHandler);
+    if (return_function_state == true)
+    {
+      Serial.println("SUCCESS");
+    }
+    else
+    {
+      Serial.println("FAILED");
+    }
+*/    
+    // III.c. Set Velocity and Acceleration Limits in Dynamixels
+    Serial.println("Setting Dynamixels Velocity & Acceleration Limit values");
+    return_function_state = syncSetVelAccelLimit(dxl_id, 2, dxl_vel_limit,dxl_accel_limit,groupSyncWriteVelLim,groupSyncWriteAccelLim, packetHandler, portHandler);
+    if (return_function_state == true)
+    {
+      Serial.println("SUCCESS");
+    }
+    else
+    {
+      Serial.println("FAILED");
+    }
+  
+    // IV. Homing Stepper Motor[Joint1] using AccelStepper 
+    // To make new...
+    delay(1000);
+  
+    // V.  Homing Dynamixel Motors[Joint2,3] using Dynamixel SDK
+    Serial.println("Started Homing Dynamixels");
+    return_function_state == false;
+    return_function_state = HomingDynamixelProfilesSDK(dxl_id, 2, groupSyncWrite_GP_A_V_LED, groupSyncWrite_GREEN_LED, groupSyncRead_PP_M_MS, packetHandler, portHandler);
+    if (return_function_state == true)
+    {
+      Serial.println("SUCCESS");
+    }
+    else
+    {
+      Serial.println("FAILED");
+    }
+  
+    // VI. Simple P2P Motion StepperNema34 + 2 Dynamixels
+    int32_t DxlInitPos = 0;
+    int32_t DxlGoalPosition = 100000;
+    int32_t DxlVmax = dxl_vel_limit;
+    int32_t DxlAmax = dxl_accel_limit/10;
+    float StpInitPos = 0;
+    //double StpGoalPosition = 0.25*6.28318531;
+    float StpGoalPosition = 0.15*6.28312;           // 0.15 for 100000
+    float StpVmax = 5.0000;
+    float StpAmax = 5.0000;
+    uint8_t MotorsIDs[] = {DXL1_ID, DXL2_ID, STP_ID};
+    int32_t DxlTrapzProfParams[] = {DxlInitPos, DxlGoalPosition, DxlVmax, DxlAmax};
+    float   StpTrapzProfParams[] = {StpInitPos, StpGoalPosition, StpVmax, StpAmax};
+    int MotorsIds_size = 3;
+    int TrapzProfParams_size =4;
+  
+    // Simple Sync Stepper-Dynamixel motors for P2P motion:
+    Serial.println("Started Sync P2P Dynamixels-Stepper");
+    return_function_state = SimpleSyncP2P_TrapzVelProf_SDK(MotorsIDs, MotorsIds_size, DxlTrapzProfParams, StpTrapzProfParams, TrapzProfParams_size, groupSyncWrite_GP_A_V_LED, groupSyncWrite_TORQUE_ENABLE, groupSyncRead_PP_M_MS, packetHandler, portHandler);
+    //return_function_state = SimpleSyncP2Pbulk_TrapzVelProf_SDK(MotorsIDs, MotorsIds_size, DxlTrapzProfParams, StpTrapzProfParams, TrapzProfParams_size, groupSyncWrite_GP_A_V_LED, groupSyncWrite_TORQUE_ENABLE, groupBulkRead, packetHandler, portHandler);
+    if (return_function_state == true)
+    {
+      Serial.println("SUCCESS");
+    }
+    else
+    {
+      Serial.println("FAILED");
+    }
 
-
-  // III.c. Set Velocity and Acceleration Limits in Dynamixels
-  Serial.println("Setting Velocity & Acceleration Limit values");
-  return_function_state = syncSetVelAccelLimit(dxl_id, 2, dxl_vel_limit,dxl_accel_limit,groupSyncWriteVelLim,groupSyncWriteAccelLim, packetHandler, portHandler);
-  if (return_function_state == true)
-  {
-    Serial.println("SUCCESS");
-  }
-  else
-  {
-    Serial.println("FAILED");
-  }
-  delay(1000);
-
-  // IV. Homing Stepper Motor[Joint1] using AccelStepper 
-  // To make new...
-  //delay(1000);
-
-  // V.  Homing Dynamixel Motors[Joint2,3] using Dynamixel SDK
-  Serial.println("Started Homing Dynamixels");
-  return_function_state == false;
-  return_function_state = HomingDynamixelProfilesSDK(dxl_id, 2, groupSyncWrite_GP_A_V_LED, groupSyncWrite_GREEN_LED, groupSyncRead_PP_M_MS, packetHandler, portHandler);
-  if (return_function_state == true)
-  {
-    Serial.println("SUCCESS");
-  }
-  else
-  {
-    Serial.println("FAILED");
-  }
-  delay(1000);
-
-  // VI. Simple P2P Motion StepperNema34 + 2 Dynamixels
-  int32_t DxlInitPos = 0;
-  int32_t DxlGoalPosition = 100000;
-  int32_t DxlVmax = dxl_vel_limit;
-  int32_t DxlAmax = dxl_accel_limit/10;
-  float StpInitPos = 0;
-  //double StpGoalPosition = 0.25*6.28318531;
-  float StpGoalPosition = 0.15*6.28312;           // 0.15 for 100000
-  float StpVmax = 5.0000;
-  float StpAmax = 5.0000;
-  uint8_t MotorsIDs[] = {DXL1_ID, DXL2_ID, STP_ID};
-  int32_t DxlTrapzProfParams[] = {DxlInitPos, DxlGoalPosition, DxlVmax, DxlAmax};
-  float   StpTrapzProfParams[] = {StpInitPos, StpGoalPosition, StpVmax, StpAmax};
-  int MotorsIds_size = 3;
-  int TrapzProfParams_size =4;
-
-  // Simple Sync Stepper-Dynamixel motors for P2P motion:
-  Serial.println("Started Sync P2P Dynamixels-Stepper");
-  return_function_state == false;
-  return_function_state = SimpleSyncP2P_TrapzVelProf_SDK(MotorsIDs, MotorsIds_size, DxlTrapzProfParams, StpTrapzProfParams, TrapzProfParams_size, groupSyncWrite_GP_A_V_LED, groupSyncRead_PP_M_MS, packetHandler, portHandler);
-  if (return_function_state == true)
-  {
-    Serial.println("SUCCESS");
-  }
-  else
-  {
-    Serial.println("FAILED");
-  }
-  delay(1000);
-
+    // Read present position
+    dxl_comm_result = packetHandler->read4ByteTxRx(portHandler, DXL1_ID, ADDR_PRO_PRESENT_POSITION, (uint32_t*)&dxl_present_position1, &dxl_error);
+    if (dxl_comm_result != COMM_SUCCESS)
+    {
+      packetHandler->getTxRxResult(dxl_comm_result); Serial.println("dxl_present_position1 FAILED");
+    }
+    else if (dxl_error != 0)
+    {
+      packetHandler->getRxPacketError(dxl_error); Serial.println("dxl_present_position2 FAILED");
+    }
+    Serial.print("[ID: "); Serial.print(DXL1_ID); Serial.print("] Present Position: "); Serial.println(dxl_present_position1);
+         
     // Disable Torque
-    param_torque_enable = 0;
-
-    dxl_addparam_result = groupSyncWrite_TORQUE_ENABLE.addParam(DXL1_ID, &param_torque_enable);
-    if (dxl_addparam_result != true)
+    uint8_t param_torque_enable = 0;
+    Serial.println("Setting Dynamixels TORQUE");
+    return_function_state = syncSetTorque(dxl_id, 2, param_torque_enable, groupSyncWrite_TORQUE_ENABLE, packetHandler);
+    if (return_function_state == true)
     {
-      Serial.print("[ID:"); Serial.print(DXL1_ID); Serial.println("groupSyncWrite_TORQUE_ENABLE.addParam failed");
-    }
-
-    dxl_addparam_result = groupSyncWrite_TORQUE_ENABLE.addParam(DXL2_ID, &param_torque_enable);
-    if (dxl_addparam_result != true)
-    {
-      Serial.print("[ID:"); Serial.print(DXL2_ID); Serial.println("groupSyncWrite_TORQUE_ENABLE.addParam failed");
-    }
-
-    dxl_comm_result = groupSyncWrite_TORQUE_ENABLE.txPacket();
-    if (dxl_comm_result != COMM_SUCCESS)
-    {
-      Serial.print(packetHandler->getTxRxResult(dxl_comm_result)); Serial.println("gamw1");
+      Serial.println("SUCCESS");
     }
     else
     {
-      Serial.println("Torque DISABLED");
+      Serial.println("FAILED");
     }
     
-    groupSyncWrite_TORQUE_ENABLE.clearParam();
-  // Close port
-  portHandler->closePort();
+    // Close port
+    portHandler->closePort();
 }
 
 void loop()
