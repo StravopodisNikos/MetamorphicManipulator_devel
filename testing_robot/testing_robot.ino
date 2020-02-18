@@ -133,9 +133,9 @@ int dxl_vel_limit   = 2000;
 // Debugging
 // int index = 0;
 int dxl_comm_result = COMM_TX_FAIL;                                                        // Communication result
-bool return_function_state = false;
 bool dxl_addparam_result = false;                                                          // addParam result
 bool dxl_getdata_result = false;                                                           // GetParam result
+bool return_function_state = false;
 uint8_t dxl_error = 0;                                                                     // Dynamixel error
 uint16_t dxl_model_number[2];                                                              // Dynamixel model number
 int32_t dxl1_present_position = 0, dxl2_present_position = 0;                              // Present position
@@ -208,7 +208,8 @@ void setup() {
     /*  
      * IV. Begin Motion Testing
      */
-    // IV.a.1 Stepper Execute Trapezoidal Velocity profile
+    // IV.a.1 Stepper Execute Trapezoidal Velocity profile => TESTED OK
+    /*
     double setStepperTestTime  = 2.0;
     double setStepperGoalAngle = 1.5708;
     double *StepperTestAssignedProperties;
@@ -224,9 +225,60 @@ void setup() {
     {
       Serial.println("FAILED");
     }
+*/
+    // IV.a.2 Stepper Homing and Goal Position with Assigned Duration
 
+    // Homing
+/*
+    return_function_state = Joint1Stepper.setStepperHomePosition();
+    if(return_function_state == true)
+    {
+      Serial.println("SUCCESS");
+    }
+    else
+    {
+      Serial.println("FAILED");
+    }
 
+    Serial.print("HOME = "); Serial.println(Joint1Stepper.currentAbsPos);
+*/    
+    // Goal Position1 with Assigned Duration
+    Joint1Stepper.currentAbsPos = 0;
+    Joint1Stepper.currentMoveRel = 0;
+    Joint1Stepper.currentDirStatus = LOW;
 
+    double setStepperTestTime  = 2.0;
+    double setStepperGoalAngle = 1.5708;
+    return_function_state = Joint1Stepper.setStepperGoalPositionAssignedDuration(setStepperTestTime, setStepperGoalAngle);
+    if(return_function_state == true)
+    {
+      Serial.println("SUCCESS");
+    }
+    else
+    {
+      Serial.println("FAILED");
+    }
+
+    Serial.print("GOAL1 = "); Serial.println(Joint1Stepper.currentAbsPos);
+    Serial.print("MOVED FOR GOAL1 = "); Serial.println(Joint1Stepper.currentMoveRel);
+    
+    delay(1000);
+    // Goal Position2 with Assigned Duration
+    setStepperTestTime  = 5.0;
+    setStepperGoalAngle = 0.7854;
+    return_function_state = Joint1Stepper.setStepperGoalPositionAssignedDuration(setStepperTestTime, setStepperGoalAngle);
+    if(return_function_state == true)
+    {
+      Serial.println("SUCCESS");
+    }
+    else
+    {
+      Serial.println("FAILED");
+    }
+
+    Serial.print("GOAL2 = "); Serial.println(Joint1Stepper.currentAbsPos);
+    Serial.print("MOVED FOR GOAL2 = "); Serial.println(Joint1Stepper.currentMoveRel);
+    
 } // END SETUP
 
 void loop() {
