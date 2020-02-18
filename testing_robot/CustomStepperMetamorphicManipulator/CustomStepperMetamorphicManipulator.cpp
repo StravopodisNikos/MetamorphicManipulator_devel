@@ -20,6 +20,7 @@ CustomStepperMetamorphicManipulator::CustomStepperMetamorphicManipulator(int ste
     digitalWrite(enblPin, LOW);
     digitalWrite(dirPin, LOW);
 
+    _stepID         = stepID;
     _stepPin        = stepPin;
     _dirPin         = dirPin;
     _enblPin        = enblPin;
@@ -59,9 +60,10 @@ double * CustomStepperMetamorphicManipulator::returnTrajAssignedDurationProperti
 
 	// Compute Vmax, Amax
 
-	double Vmax = h / ( (1 - _accel_width) * Texec );
-	double Amax = h / ( _accel_width * ( 1 - _accel_width) * pow(Texec,2.0) );
- 	
+	double Vmax =   abs( h / ( (1 - _accel_width) * Texec ) ) ;
+  Serial.print("Vmax = "); Serial.println(Vmax);
+	double Amax = abs( h / ( _accel_width * ( 1 - _accel_width) * pow(Texec,2.0) ) );
+ 	Serial.print("Amax = "); Serial.println(Amax);
   static double TrajAssignedDuration[5] = {h, Texec, Ta, Vmax, Amax};
 
 	return TrajAssignedDuration;
@@ -70,7 +72,7 @@ double * CustomStepperMetamorphicManipulator::returnTrajAssignedDurationProperti
 // =========================================================================================================== //
 
 // executeStepperTrapzProfile
-bool CustomStepperMetamorphicManipulator::executeStepperTrapzProfile(bool segmentExists, long *PROFILE_STEPS, double Texec, double delta_t){
+bool CustomStepperMetamorphicManipulator::executeStepperTrapzProfile(bool segmentExists, unsigned long *PROFILE_STEPS, double Texec, double delta_t){
 
 	/*
 	 *  Runs Stepper for predefined angle with Trapezoidal Velocity Profile
@@ -180,6 +182,7 @@ bool CustomStepperMetamorphicManipulator::syncTrajPreassignedAccelVel(double *St
 	// Check condition for determination of Trapezoidal/Triangular Profile:
 	if(StpTrapzProfParams[0] >= h_cond)
 	{
+    //Serial.println("ok2");
 		// In this case: p2p is executed for Texec with the preassigned Vmax,Amax!
 		Serial.println("Trapezoidal Profile!"); segmentExists = true;
 
@@ -228,10 +231,14 @@ bool CustomStepperMetamorphicManipulator::syncTrajPreassignedAccelVel(double *St
     Serial.print("Initial Step Delay Time(c0)                   = "); Serial.print(c0,6);        Serial.println("  [secs] ");
 
     // Execute Real time profile - > Calls function to execute Stepper motion
-    long PROFILE_STEPS[4] = {h_step, nmov_Ta, nmov_linseg, nmov_Td};
+    //long PROFILE_STEPS[4] = {h_step, nmov_Ta, nmov_linseg, nmov_Td};
+    PROFILE_STEPS[0] = h_step;
+    PROFILE_STEPS[1] = nmov_Ta;
+    PROFILE_STEPS[2] = nmov_linseg;
+    PROFILE_STEPS[3] = nmov_Td;
+    //PROFILE_STEPS = {h_step, nmov_Ta, nmov_linseg, nmov_Td};
 
     Serial.println("Executing stepper motion with Trapezoidal Velocity Profile...");
-    bool return_function_state = false;
 	  return_function_state = CustomStepperMetamorphicManipulator::executeStepperTrapzProfile(segmentExists, PROFILE_STEPS, StpTrapzProfParams[1], c0);
     if (return_function_state == true)
     {
@@ -248,6 +255,86 @@ return true;
 
 // =========================================================================================================== //
 
+// setStepperHomePosition
+bool CustomStepperMetamorphicManipulator::setStepperHomePosition(){
+
+  unsigned long homing_stepping_delay = 250;
+
+  Serial.print("[ Stepper ID: "); Serial.print(_stepID); Serial.println("] HOMING ... ");
+  
+  digitalWrite(_ledPin, HIGH);                                                                          
+  
+  while( (digitalRead(_hallSwitchPin) == 0 ) )
+  {                                                                        
+      CustomStepperMetamorphicManipulator::singleStepVarDelay(homing_stepping_delay);                  
+  }
+
+  long currentAbsPos = 10;
+
+  Serial.print("[ Stepper ID: "); Serial.print(_stepID); Serial.println("] HOMING FINISHED ");
+  
+  digitalWrite(_ledPin, LOW);                        
+
+return true;
+} // END OF FUNCTION
+
 // =========================================================================================================== //
+
+// setStepperGoalPosition
+bool CustomStepperMetamorphicManipulator::setStepperGoalPositionAssignedDuration(double Texec, double h){
+
+ 	/*
+	 *  Moves Stepper to goal position with Trapezoidal Velocity Profile
+	 *  INPUT: Texec = Motion Execution Time [secs] , h = Absolute Angular Position [rad]
+	 */ 
+  Serial.print("Texec="); Serial.println(Texec,6);
+  Serial.print("h="); Serial.println(h,6);
+
+  int newDirStatus;
+
+  long inputAbsPos = round( h / _ag);
+
+  int previousDirStatus = currentDirStatus;
+  long previousMoveRel  = currentMoveRel; 
+  long previousAbsPos   = currentAbsPos;
+  
+  if (inputAbsPos == previousAbsPos)
+      return false;                                 // Already there
+
+    long moveRel = inputAbsPos - previousAbsPos;
+    double hRel = abs( moveRel * _ag);
+    Serial.print("hRel = "); Serial.println(hRel,6);
+
+    if( moveRel*previousMoveRel >=0 ){
+        newDirStatus = previousDirStatus;
+        digitalWrite(_dirPin, newDirStatus);     	  // Direction doesn't change
+    }else{
+        //Serial.println("ok1");
+        newDirStatus = !previousDirStatus;
+        digitalWrite(_dirPin, newDirStatus);       	// Direction changes
+    }
+    Serial.print("newDirStatus = "); Serial.println(newDirStatus);
+    //Serial.println(moveRel);
+
+    // Calculate Velocity - Acceleration
+    // GAMW THN PANAGIA MOU
+    StepperGoalPositionProperties = CustomStepperMetamorphicManipulator::returnTrajAssignedDurationProperties(Texec, hRel);
+    
+    Serial.print("h="); Serial.println(StepperGoalPositionProperties[0],6);
+    Serial.print("Texec="); Serial.println(StepperGoalPositionProperties[1],6);
+    Serial.print("Ta="); Serial.println(StepperGoalPositionProperties[2],6);
+    Serial.print("Vmax="); Serial.println(StepperGoalPositionProperties[3],6);
+    Serial.print("Amax="); Serial.println(StepperGoalPositionProperties[4],6);
+
+    // Move Motor with Trapezoidal Profile
+    return_function_state = CustomStepperMetamorphicManipulator::syncTrajPreassignedAccelVel(StepperGoalPositionProperties);
+    
+    // Saves for next call
+    currentDirStatus = newDirStatus;
+    currentMoveRel   = moveRel;
+    currentAbsPos    = inputAbsPos;
+   
+return return_function_state;
+}
 
 // =========================================================================================================== //
