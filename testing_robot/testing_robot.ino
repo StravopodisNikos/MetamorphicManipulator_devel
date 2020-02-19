@@ -1,3 +1,5 @@
+
+
 /*   *********************************************************************************************
  *   Executes tests for Metamorphic Manipulator with 1 Nema34 Stepper + 3 Dynamixels
  *   using Trapezoidal Velocity profile
@@ -16,6 +18,8 @@
 #include "OpenCR.h"
 #include "stdlib.h"
 #include "stdio.h"
+#include <Vector.h>
+#include <Streaming.h>
 
 // Control Table Used Items Address
 #define ADDR_PRO_TORQUE_ENABLE                  512                 // Control table address is different in Dynamixel model
@@ -135,10 +139,11 @@ int dxl_vel_limit   = 2000;
 int dxl_comm_result = COMM_TX_FAIL;                                                        // Communication result
 bool dxl_addparam_result = false;                                                          // addParam result
 bool dxl_getdata_result = false;                                                           // GetParam result
-bool return_function_state = false;
+//bool return_function_state = false;
 uint8_t dxl_error = 0;                                                                     // Dynamixel error
 uint16_t dxl_model_number[2];                                                              // Dynamixel model number
 int32_t dxl1_present_position = 0, dxl2_present_position = 0;                              // Present position
+//double hRel;
 
 void setup() {
     Serial.begin(BAUDRATE);
@@ -243,13 +248,42 @@ void setup() {
     Serial.print("HOME = "); Serial.println(Joint1Stepper.currentAbsPos);
 */    
     // Goal Position1 with Assigned Duration
+
     Joint1Stepper.currentAbsPos = 0;
     Joint1Stepper.currentMoveRel = 0;
     Joint1Stepper.currentDirStatus = LOW;
-
+    
+    const int ELEMENT_COUNT_MAX1 = 5;
+    const int ELEMENT_COUNT_MAX2 = 4;
+    
     double setStepperTestTime  = 2.0;
     double setStepperGoalAngle = 1.5708;
-    return_function_state = Joint1Stepper.setStepperGoalPositionAssignedDuration(setStepperTestTime, setStepperGoalAngle);
+
+    double hRel_Stepper = Joint1Stepper.setStepperGoalPositionAssignedDuration(setStepperTestTime, setStepperGoalAngle);
+    Serial.print("hRel_Stepper= "); Serial.println(hRel_Stepper,6);
+    
+    //double storage_array_for_returnTraj[ELEMENT_COUNT_MAX1];
+    //Vector<double> vector_for_returnTraj;
+    //vector_for_returnTraj.setStorage(storage_array_for_returnTraj);
+
+    Vector<double> TrajAssignedDuration1 = Joint1Stepper.returnTrajAssignedDurationProperties(setStepperTestTime, hRel_Stepper);
+    //TrajAssignedDuration = Joint1Stepper.returnTrajAssignedDurationProperties(setStepperTestTime, hRel_Stepper);
+    
+    Serial << "vector_for_returnTraj.max_size(): " << TrajAssignedDuration1.max_size() << endl;
+    Serial << "vector_for_returnTraj:" << TrajAssignedDuration1 << endl;
+
+    Serial.print("h2="); Serial.println(TrajAssignedDuration1[0],6);
+    
+    bool returned_segment_exists = Joint1Stepper.segmentExists_TrapzVelProfile(TrajAssignedDuration1);
+
+    unsigned long storage_array_for_returnTrapz[ELEMENT_COUNT_MAX2];
+    Vector<unsigned long> vector_for_returnTrapz(storage_array_for_returnTrapz);
+    
+    vector_for_returnTrapz = Joint1Stepper.returnTrapzVelProfileSteps(TrajAssignedDuration1, returned_segment_exists);
+
+    double initial_step_delay = Joint1Stepper.calculateInitialStepDelay(TrajAssignedDuration1);
+         
+    return_function_state = Joint1Stepper.executeStepperTrapzProfile(returned_segment_exists, vector_for_returnTrapz, setStepperTestTime, initial_step_delay);
     if(return_function_state == true)
     {
       Serial.println("SUCCESS");
@@ -263,10 +297,23 @@ void setup() {
     Serial.print("MOVED FOR GOAL1 = "); Serial.println(Joint1Stepper.currentMoveRel);
     
     delay(1000);
+
+    /*
     // Goal Position2 with Assigned Duration
     setStepperTestTime  = 5.0;
     setStepperGoalAngle = 0.7854;
-    return_function_state = Joint1Stepper.setStepperGoalPositionAssignedDuration(setStepperTestTime, setStepperGoalAngle);
+    
+    Joint1Stepper.hRel = Joint1Stepper.setStepperGoalPositionAssignedDuration(setStepperTestTime, setStepperGoalAngle);
+    Serial.print("hRel2="); Serial.println(Joint1Stepper.hRel,6);
+    
+    StepperTestAssignedProperties2 = Joint1Stepper.returnTrajAssignedDurationProperties(setStepperTestTime, Joint1Stepper.hRel);
+    Serial.print("h2="); Serial.println(StepperTestAssignedProperties2[0],6);
+    Serial.print("Texec2="); Serial.println(StepperTestAssignedProperties2[1],6);
+    Serial.print("Ta2="); Serial.println(StepperTestAssignedProperties2[2],6);
+    Serial.print("Vmax2="); Serial.println(StepperTestAssignedProperties2[3],6);
+    Serial.print("Amax2="); Serial.println(StepperTestAssignedProperties2[4],6);
+    return_function_state = Joint1Stepper.syncTrajPreassignedAccelVel(StepperTestAssignedProperties2);
+    
     if(return_function_state == true)
     {
       Serial.println("SUCCESS");
@@ -278,7 +325,7 @@ void setup() {
 
     Serial.print("GOAL2 = "); Serial.println(Joint1Stepper.currentAbsPos);
     Serial.print("MOVED FOR GOAL2 = "); Serial.println(Joint1Stepper.currentMoveRel);
-    
+    */
 } // END SETUP
 
 void loop() {
