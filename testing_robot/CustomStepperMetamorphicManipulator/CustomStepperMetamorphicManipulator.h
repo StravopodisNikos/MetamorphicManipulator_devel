@@ -7,6 +7,9 @@
 #define CustomStepperMetamorphicManipulator_h
 
 #include "Arduino.h"
+#include <vector>
+
+using namespace std;
 
 const float pi              = 3.14159265359;
 
@@ -18,20 +21,29 @@ class CustomStepperMetamorphicManipulator
         long currentAbsPos;
         long currentMoveRel;
         int currentDirStatus;
+        bool segmentExists;
 
         CustomStepperMetamorphicManipulator(int stepID, int stepPin, int dirPin, int enblPin, int ledPin, int hallSwitchPin, int spr, int GEAR_FACTOR, int ft );
-
-        void singleStepVarDelay(unsigned long delayTime);
         
-        double * returnTrajAssignedDurationProperties(double Texec, double h);
+        // Returns: StpTrapzProfParams
+        vector<double> returnTrajAssignedDurationProperties(double Texec, double hRel);
 
-        bool executeStepperTrapzProfile(bool segmentExists, unsigned long *PROFILE_STEPS, double Texec, double delta_t);
+            // Returns: segmentExists
+            bool segmentExists_TrapzVelProfile(vector<double> StpTrapzProfParams);
+            
+            // Returns: PROFILE_STEPS
+            vector<unsigned long> returnTrapzVelProfileSteps(vector<double> StpTrapzProfParams, bool segmentExists);
 
-        bool syncTrajPreassignedAccelVel(double *StpTrapzProfParams);
+            // Returns: delta_t
+            double calculateInitialStepDelay(vector<double> StpTrapzProfParams);
 
         bool setStepperHomePosition();
 
-        bool setStepperGoalPositionAssignedDuration(double Texec, double h);
+        double setStepperGoalPositionAssignedDuration(double Texec, double hAbs);
+
+
+        // Executes Trajectory
+        bool executeStepperTrapzProfile(bool segmentExists, vector<unsigned long> PROFILE_STEPS, double Texec, double delta_t);
 
     private:
         int _stepID;
@@ -46,8 +58,8 @@ class CustomStepperMetamorphicManipulator
         float _a;
         float _ag;
         float _accel_width;
-        double *StepperGoalPositionProperties;
-        unsigned long PROFILE_STEPS[4];
+        
+        void singleStepVarDelay(unsigned long delayTime);
 };
 
  #endif

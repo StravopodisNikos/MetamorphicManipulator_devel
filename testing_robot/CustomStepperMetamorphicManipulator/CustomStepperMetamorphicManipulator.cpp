@@ -4,7 +4,10 @@
   */
 
 #include "Arduino.h"
+#include <vector>
 #include "CustomStepperMetamorphicManipulator.h"
+
+using namespace std;
 
 // Constructor
 CustomStepperMetamorphicManipulator::CustomStepperMetamorphicManipulator(int stepID, int stepPin, int dirPin, int enblPin, int ledPin, int hallSwitchPin, int spr, int GEAR_FACTOR, int ft )
@@ -52,19 +55,25 @@ void CustomStepperMetamorphicManipulator::singleStepVarDelay(unsigned long delay
 // =========================================================================================================== //
 
 // returnTrajAssignedDurationProperties
-double * CustomStepperMetamorphicManipulator::returnTrajAssignedDurationProperties(double Texec, double h) {
+vector<double> CustomStepperMetamorphicManipulator::returnTrajAssignedDurationProperties(double Texec, double hRel) {
 
+  // Define return vector
+  vector<double> TrajAssignedDuration;
+  
 	// Pre - determine the width of acceleration phase
 	// Ta = accel_width * Texec
 	double Ta = _accel_width * Texec;
 
 	// Compute Vmax, Amax
 
-	double Vmax =   abs( h / ( (1 - _accel_width) * Texec ) ) ;
+	double Vmax =   abs( hRel / ( (1 - _accel_width) * Texec ) ) ;
   Serial.print("Vmax = "); Serial.println(Vmax);
-	double Amax = abs( h / ( _accel_width * ( 1 - _accel_width) * pow(Texec,2.0) ) );
+	double Amax = abs( hRel / ( _accel_width * ( 1 - _accel_width) * pow(Texec,2.0) ) );
  	Serial.print("Amax = "); Serial.println(Amax);
-  static double TrajAssignedDuration[5] = {h, Texec, Ta, Vmax, Amax};
+  
+  double array_to_fill_vector[] = {hRel,Texec,Ta,Vmax,Amax};
+
+  TrajAssignedDuration.assign(array_to_fill_vector, array_to_fill_vector + 5);
 
 	return TrajAssignedDuration;
 } // END function returnTrajAssignedDurationProperties
@@ -72,7 +81,7 @@ double * CustomStepperMetamorphicManipulator::returnTrajAssignedDurationProperti
 // =========================================================================================================== //
 
 // executeStepperTrapzProfile
-bool CustomStepperMetamorphicManipulator::executeStepperTrapzProfile(bool segmentExists, unsigned long *PROFILE_STEPS, double Texec, double delta_t){
+bool CustomStepperMetamorphicManipulator::executeStepperTrapzProfile(bool segmentExists, vector<unsigned long> PROFILE_STEPS, double Texec, double delta_t){
 
 	/*
 	 *  Runs Stepper for predefined angle with Trapezoidal Velocity Profile
@@ -159,8 +168,88 @@ else
 
 // =========================================================================================================== //
 
-// syncTrajPreassignedAccelVel
-bool CustomStepperMetamorphicManipulator::syncTrajPreassignedAccelVel(double *StpTrapzProfParams) {
+// segmentExists_TrapzVelProfile
+bool CustomStepperMetamorphicManipulator::segmentExists_TrapzVelProfile(vector<double> StpTrapzProfParams){
+
+  bool segmentExists;
+  float h_cond = pow(StpTrapzProfParams[3],2.0) / StpTrapzProfParams[4];				        // Condition factor for linear segment existence in Trapezoidal Velocity Profile
+
+  if(StpTrapzProfParams[0] >= h_cond)
+  {
+      Serial.println("Trapezoidal Profile!"); 
+      segmentExists = true;
+  }
+  else
+  {
+      Serial.println("Triangular Profile! Vmax is recalculated!");
+      segmentExists = false;
+  }
+  
+  return segmentExists;
+}
+
+// =========================================================================================================== //
+
+// returnTrapzVelProfileSteps
+vector<unsigned long> CustomStepperMetamorphicManipulator::returnTrapzVelProfileSteps(vector<double> StpTrapzProfParams, bool segmentExists){
+
+  vector<unsigned long> PROFILE_STEPS; 
+
+  float h_accel;
+  unsigned long nmov_Ta;
+  unsigned long nmov_Td; 
+  unsigned long nmov_linseg;
+  unsigned long h_accel_step;
+  
+  unsigned long h_step = round( StpTrapzProfParams[0] / _ag );                          // Calculate displacement in [steps]
+
+  if(segmentExists)
+  {
+      // Determine Profile Step Variables based on Real Time Profiles vs Melchiorri
+      h_accel   = 0.5 * StpTrapzProfParams[4] * pow(StpTrapzProfParams[2],2.0);
+      
+      float h_lin_seg = StpTrapzProfParams[4] * _accel_width * pow(StpTrapzProfParams[1],2.0) * ( 1 - 2 * _accel_width);
+      
+      h_accel_step = round( h_accel / _ag );
+      unsigned long h_lin_seg_step = round( h_lin_seg / _ag );
+
+      nmov_Ta      = h_accel_step;                                                         // Steps of Acceleration Phase;
+      nmov_linseg  = h_lin_seg_step;                                                       // Steps of liner segment 
+      nmov_Td      = h_step - ( h_accel_step + h_lin_seg_step ) ;													 // Steps of Decceleration Phase; 
+  }
+  else
+  {
+      // In this case: p2p is executed for Texec with the recalculated Vmax!
+      float nTa = sqrt(StpTrapzProfParams[0]/StpTrapzProfParams[4]);
+
+      float nVmax = StpTrapzProfParams[4] * nTa;
+
+      Serial.print("New maximum Velocity:"); Serial.print(nVmax,6); Serial.println("[rad/sec]");
+
+      h_accel  = 0.5 * StpTrapzProfParams[4] * pow(nTa,2.0);
+      h_accel_step = round( h_accel / _ag );
+
+      nmov_Ta      = h_accel_step;
+      nmov_linseg  = 0;
+      nmov_Td      = h_step - h_accel_step ;
+  }
+
+  // Print info
+	Serial.print("Steps of Accel Phase(nmov_Ta)                 = "); Serial.print(nmov_Ta);     Serial.println(" [steps] ");
+  Serial.print("Steps of Constant Velocity Phase(nmov_linseg) = "); Serial.print(nmov_linseg); Serial.println(" [steps] ");
+  Serial.print("Steps of Deccel Phase(nmov_Td)                = "); Serial.print(nmov_Td);     Serial.println(" [steps] "); 
+
+  unsigned long array_to_fill_PROFILE_STEPS[] = {h_step, nmov_Ta, nmov_linseg, nmov_Td};
+
+  PROFILE_STEPS.assign(array_to_fill_PROFILE_STEPS, array_to_fill_PROFILE_STEPS + 4);
+
+  return PROFILE_STEPS;
+}
+
+// =========================================================================================================== //
+
+// calculateInitialStepDelay
+double CustomStepperMetamorphicManipulator::calculateInitialStepDelay(vector<double> StpTrapzProfParams) {
 // Based on Par. 3.2.2. Trajectory Planning for Machines and Robots
 
 	/* 
@@ -169,87 +258,13 @@ bool CustomStepperMetamorphicManipulator::syncTrajPreassignedAccelVel(double *St
 	 *  StpVmax -> [rad/sec]
 	 *  StpAmax -> [rad/sec^2]
 	 */
-    bool segmentExists;
-    unsigned long nmov_Ta;
-    unsigned long nmov_Td; 
-    unsigned long nmov_linseg;
-    unsigned long h_accel_step;
-    float h_accel;
 
-	float h_cond = pow(StpTrapzProfParams[3],2.0) / StpTrapzProfParams[4];				        // Condition factor for linear segment existence in Trapezoidal Velocity Profile
-	unsigned long h_step = round( StpTrapzProfParams[0] / _ag );                          // Calculate displacement in [steps]
+  // Determine initial step delay time for real-time profile generation: c0 with ignored inaccuracy factor [sec]
+  float sqrt_for_c0_calc =  (2 * _ag) / StpTrapzProfParams[4] ;
+  double c0              =  0.676 * _ft * pow(10.0,-6.0) * sqrt(sqrt_for_c0_calc);							                  
+  Serial.print("Initial Step Delay Time(c0)                   = "); Serial.print(c0,6);        Serial.println("  [secs] ");
 
-	// Check condition for determination of Trapezoidal/Triangular Profile:
-	if(StpTrapzProfParams[0] >= h_cond)
-	{
-    //Serial.println("ok2");
-		// In this case: p2p is executed for Texec with the preassigned Vmax,Amax!
-		Serial.println("Trapezoidal Profile!"); segmentExists = true;
-
-    // Determine Profile Step Variables based on Real Time Profiles vs Melchiorri
-		h_accel   = 0.5 * StpTrapzProfParams[4] * pow(StpTrapzProfParams[2],2.0);
-		
-    float h_lin_seg = StpTrapzProfParams[4] * _accel_width * pow(StpTrapzProfParams[1],2.0) * ( 1 - 2 * _accel_width);
-		
-    h_accel_step = round( h_accel / _ag );
-		unsigned long h_lin_seg_step = round( h_lin_seg / _ag );
-
-		nmov_Ta      = h_accel_step;                                                         // Steps of Acceleration Phase;
-	  nmov_linseg  = h_lin_seg_step;                                                       // Steps of liner segment 
-	  nmov_Td      = h_step - ( h_accel_step + h_lin_seg_step ) ;													 // Steps of Decceleration Phase; 			
-
-	}
-	else
-	{
-		// In this case: p2p is executed for Texec with the recalculated Vmax!
-		Serial.println("Triangular Profile! Vmax is recalculated!"); segmentExists = false;
-		// Calculate Theoretical Time Execution Values!
-		float nTa = sqrt(StpTrapzProfParams[0]/StpTrapzProfParams[4]);
-
-		float nVmax = StpTrapzProfParams[4] * nTa;
-
-		Serial.print("New maximum Velocity:"); Serial.print(nVmax,6); Serial.println("[rad/sec]");
-
-		h_accel  = 0.5 * StpTrapzProfParams[4] * pow(nTa,2.0);
-		h_accel_step = round( h_accel / _ag );
-
-		nmov_Ta      = h_accel_step;
-		nmov_linseg  = 0;
-		nmov_Td      = h_step - h_accel_step ;
-
-	}
-
-	// Print info
-	  Serial.print("Steps of Accel Phase(nmov_Ta)                 = "); Serial.print(nmov_Ta);     Serial.println(" [steps] ");
-    Serial.print("Steps of Constant Velocity Phase(nmov_linseg) = "); Serial.print(nmov_linseg); Serial.println(" [steps] ");
-    Serial.print("Steps of Deccel Phase(nmov_Td)                = "); Serial.print(nmov_Td);     Serial.println(" [steps] ");   
-
-
-    // Determine initial step delay time for real-time profile generation: c0 with ignored inaccuracy factor [sec]
-    float sqrt_for_c0_calc =  (2 * _ag) / StpTrapzProfParams[4] ;
-    double c0              =  0.676 * _ft * pow(10.0,-6.0) * sqrt(sqrt_for_c0_calc);							                  
-    Serial.print("Initial Step Delay Time(c0)                   = "); Serial.print(c0,6);        Serial.println("  [secs] ");
-
-    // Execute Real time profile - > Calls function to execute Stepper motion
-    //long PROFILE_STEPS[4] = {h_step, nmov_Ta, nmov_linseg, nmov_Td};
-    PROFILE_STEPS[0] = h_step;
-    PROFILE_STEPS[1] = nmov_Ta;
-    PROFILE_STEPS[2] = nmov_linseg;
-    PROFILE_STEPS[3] = nmov_Td;
-    //PROFILE_STEPS = {h_step, nmov_Ta, nmov_linseg, nmov_Td};
-
-    Serial.println("Executing stepper motion with Trapezoidal Velocity Profile...");
-	  return_function_state = CustomStepperMetamorphicManipulator::executeStepperTrapzProfile(segmentExists, PROFILE_STEPS, StpTrapzProfParams[1], c0);
-    if (return_function_state == true)
-    {
-      Serial.println("SUCCESS");
-    }
-    else
-    {
-      Serial.println("FAILED");
-    }
-
-return true;
+return c0;
 
 } // END OF FUNCTION
 
@@ -281,60 +296,52 @@ return true;
 // =========================================================================================================== //
 
 // setStepperGoalPosition
-bool CustomStepperMetamorphicManipulator::setStepperGoalPositionAssignedDuration(double Texec, double h){
+double CustomStepperMetamorphicManipulator::setStepperGoalPositionAssignedDuration(double Texec, double hAbs){
 
  	/*
 	 *  Moves Stepper to goal position with Trapezoidal Velocity Profile
 	 *  INPUT: Texec = Motion Execution Time [secs] , h = Absolute Angular Position [rad]
+   *  OUTPUT: hRelative = Relative Angular Movement [rad]
 	 */ 
+  double hRelative;
+
   Serial.print("Texec="); Serial.println(Texec,6);
-  Serial.print("h="); Serial.println(h,6);
+  Serial.print("hAbs="); Serial.println(hAbs,6);
 
   int newDirStatus;
 
-  long inputAbsPos = round( h / _ag);
+  long inputAbsPos = round( hAbs / _ag);
 
   int previousDirStatus = currentDirStatus;
   long previousMoveRel  = currentMoveRel; 
   long previousAbsPos   = currentAbsPos;
   
-  if (inputAbsPos == previousAbsPos)
+  if (inputAbsPos == previousAbsPos){
       return false;                                 // Already there
+  }
 
-    long moveRel = inputAbsPos - previousAbsPos;
-    double hRel = abs( moveRel * _ag);
-    Serial.print("hRel = "); Serial.println(hRel,6);
+  long moveRel = inputAbsPos - previousAbsPos;
+  hRelative = abs( moveRel * _ag);
+  Serial.print("hRelative = "); Serial.println(hRelative,6);
 
-    if( moveRel*previousMoveRel >=0 ){
-        newDirStatus = previousDirStatus;
-        digitalWrite(_dirPin, newDirStatus);     	  // Direction doesn't change
-    }else{
-        //Serial.println("ok1");
-        newDirStatus = !previousDirStatus;
-        digitalWrite(_dirPin, newDirStatus);       	// Direction changes
-    }
+  if( moveRel*previousMoveRel >=0 ){
+      newDirStatus = previousDirStatus;
+      digitalWrite(_dirPin, newDirStatus);     	  // Direction doesn't change
+  }else{
+      //Serial.println("ok1");
+      newDirStatus = !previousDirStatus;
+      digitalWrite(_dirPin, newDirStatus);       	// Direction changes
+  }
     Serial.print("newDirStatus = "); Serial.println(newDirStatus);
     //Serial.println(moveRel);
 
-    // Calculate Velocity - Acceleration
-    // GAMW THN PANAGIA MOU
-    StepperGoalPositionProperties = CustomStepperMetamorphicManipulator::returnTrajAssignedDurationProperties(Texec, hRel);
-    
-    Serial.print("h="); Serial.println(StepperGoalPositionProperties[0],6);
-    Serial.print("Texec="); Serial.println(StepperGoalPositionProperties[1],6);
-    Serial.print("Ta="); Serial.println(StepperGoalPositionProperties[2],6);
-    Serial.print("Vmax="); Serial.println(StepperGoalPositionProperties[3],6);
-    Serial.print("Amax="); Serial.println(StepperGoalPositionProperties[4],6);
-
-    // Move Motor with Trapezoidal Profile
-    return_function_state = CustomStepperMetamorphicManipulator::syncTrajPreassignedAccelVel(StepperGoalPositionProperties);
-    
     // Saves for next call
     currentDirStatus = newDirStatus;
     currentMoveRel   = moveRel;
     currentAbsPos    = inputAbsPos;
-   
-return return_function_state;
+
+    // Calculate Velocity - Acceleration
+    return hRelative;
 }
 
 // =========================================================================================================== //
