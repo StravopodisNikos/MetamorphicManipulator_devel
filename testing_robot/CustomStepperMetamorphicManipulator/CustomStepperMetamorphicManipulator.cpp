@@ -4,10 +4,12 @@
   */
 
 #include "Arduino.h"
-#include <vector>
+//#include <vector>
+#include <Vector.h>
+#include <Streaming.h>
 #include "CustomStepperMetamorphicManipulator.h"
 
-using namespace std;
+//using namespace std;
 
 // Constructor
 CustomStepperMetamorphicManipulator::CustomStepperMetamorphicManipulator(int stepID, int stepPin, int dirPin, int enblPin, int ledPin, int hallSwitchPin, int spr, int GEAR_FACTOR, int ft )
@@ -55,11 +57,11 @@ void CustomStepperMetamorphicManipulator::singleStepVarDelay(unsigned long delay
 // =========================================================================================================== //
 
 // returnTrajAssignedDurationProperties
-vector<double> CustomStepperMetamorphicManipulator::returnTrajAssignedDurationProperties(double Texec, double hRel) {
+Vector<double> CustomStepperMetamorphicManipulator::returnTrajAssignedDurationProperties(double Texec, double hRel) {
 
   // Define return vector
-  vector<double> TrajAssignedDuration;
-  
+  double storage_array_for_TrajAssignedDuration[5];
+
 	// Pre - determine the width of acceleration phase
 	// Ta = accel_width * Texec
 	double Ta = _accel_width * Texec;
@@ -67,13 +69,21 @@ vector<double> CustomStepperMetamorphicManipulator::returnTrajAssignedDurationPr
 	// Compute Vmax, Amax
 
 	double Vmax =   abs( hRel / ( (1 - _accel_width) * Texec ) ) ;
-  Serial.print("Vmax = "); Serial.println(Vmax);
+  Serial.print("Vmax = "); Serial.println(Vmax,6);
 	double Amax = abs( hRel / ( _accel_width * ( 1 - _accel_width) * pow(Texec,2.0) ) );
- 	Serial.print("Amax = "); Serial.println(Amax);
+ 	Serial.print("Amax = "); Serial.println(Amax,6);
   
-  double array_to_fill_vector[] = {hRel,Texec,Ta,Vmax,Amax};
+  //double array_to_fill_vector[] = {hRel, Texec, Ta, Vmax, Amax};
+  storage_array_for_TrajAssignedDuration[0] = hRel;
+  storage_array_for_TrajAssignedDuration[1] = Texec;
+  storage_array_for_TrajAssignedDuration[2] = Ta;
+  storage_array_for_TrajAssignedDuration[3] = Vmax;
+  storage_array_for_TrajAssignedDuration[4] = Amax;
 
-  TrajAssignedDuration.assign(array_to_fill_vector, array_to_fill_vector + 5);
+  Vector<double> TrajAssignedDuration(storage_array_for_TrajAssignedDuration, 5);
+
+  Serial << "TrajAssignedDuration.max_size(): " << TrajAssignedDuration.max_size() << endl;
+  Serial << "TrajAssignedDuration:" << TrajAssignedDuration << endl;
 
 	return TrajAssignedDuration;
 } // END function returnTrajAssignedDurationProperties
@@ -81,7 +91,7 @@ vector<double> CustomStepperMetamorphicManipulator::returnTrajAssignedDurationPr
 // =========================================================================================================== //
 
 // executeStepperTrapzProfile
-bool CustomStepperMetamorphicManipulator::executeStepperTrapzProfile(bool segmentExists, vector<unsigned long> PROFILE_STEPS, double Texec, double delta_t){
+bool CustomStepperMetamorphicManipulator::executeStepperTrapzProfile(bool segmentExists, Vector<unsigned long> PROFILE_STEPS, double Texec, double delta_t){
 
 	/*
 	 *  Runs Stepper for predefined angle with Trapezoidal Velocity Profile
@@ -169,7 +179,7 @@ else
 // =========================================================================================================== //
 
 // segmentExists_TrapzVelProfile
-bool CustomStepperMetamorphicManipulator::segmentExists_TrapzVelProfile(vector<double> StpTrapzProfParams){
+bool CustomStepperMetamorphicManipulator::segmentExists_TrapzVelProfile(Vector<double> StpTrapzProfParams){
 
   bool segmentExists;
   float h_cond = pow(StpTrapzProfParams[3],2.0) / StpTrapzProfParams[4];				        // Condition factor for linear segment existence in Trapezoidal Velocity Profile
@@ -191,9 +201,12 @@ bool CustomStepperMetamorphicManipulator::segmentExists_TrapzVelProfile(vector<d
 // =========================================================================================================== //
 
 // returnTrapzVelProfileSteps
-vector<unsigned long> CustomStepperMetamorphicManipulator::returnTrapzVelProfileSteps(vector<double> StpTrapzProfParams, bool segmentExists){
+Vector<unsigned long> CustomStepperMetamorphicManipulator::returnTrapzVelProfileSteps(Vector<double> StpTrapzProfParams, bool segmentExists){
 
-  vector<unsigned long> PROFILE_STEPS; 
+
+  unsigned long storage_array_for_PROFILE_STEPS[4];
+  Vector<unsigned long> PROFILE_STEPS; 
+  PROFILE_STEPS.setStorage(storage_array_for_PROFILE_STEPS);
 
   float h_accel;
   unsigned long nmov_Ta;
@@ -239,9 +252,14 @@ vector<unsigned long> CustomStepperMetamorphicManipulator::returnTrapzVelProfile
   Serial.print("Steps of Constant Velocity Phase(nmov_linseg) = "); Serial.print(nmov_linseg); Serial.println(" [steps] ");
   Serial.print("Steps of Deccel Phase(nmov_Td)                = "); Serial.print(nmov_Td);     Serial.println(" [steps] "); 
 
-  unsigned long array_to_fill_PROFILE_STEPS[] = {h_step, nmov_Ta, nmov_linseg, nmov_Td};
+  const unsigned long array_to_fill_PROFILE_STEPS[] = {h_step, nmov_Ta, nmov_linseg, nmov_Td};
+  PROFILE_STEPS.assign(4, array_to_fill_PROFILE_STEPS);
 
-  PROFILE_STEPS.assign(array_to_fill_PROFILE_STEPS, array_to_fill_PROFILE_STEPS + 4);
+  //unsigned long array_to_fill_PROFILE_STEPS[] = {h_step, nmov_Ta, nmov_linseg, nmov_Td};
+  //Vector<unsigned long> PROFILE_STEPS(array_to_fill_PROFILE_STEPS, 4);
+
+  Serial << "PROFILE_STEPS:" << endl;
+  Serial << PROFILE_STEPS << endl;
 
   return PROFILE_STEPS;
 }
@@ -249,7 +267,7 @@ vector<unsigned long> CustomStepperMetamorphicManipulator::returnTrapzVelProfile
 // =========================================================================================================== //
 
 // calculateInitialStepDelay
-double CustomStepperMetamorphicManipulator::calculateInitialStepDelay(vector<double> StpTrapzProfParams) {
+double CustomStepperMetamorphicManipulator::calculateInitialStepDelay(Vector<double> StpTrapzProfParams) {
 // Based on Par. 3.2.2. Trajectory Planning for Machines and Robots
 
 	/* 

@@ -7,13 +7,18 @@
 #define CustomStepperMetamorphicManipulator_h
 
 #include "Arduino.h"
-#include <vector>
+#include <Vector.h>
+#include <Streaming.h>
+//#include <vector>
 
-using namespace std;
+//using namespace std;
 
 const float pi              = 3.14159265359;
 
 extern bool return_function_state;
+extern Vector<double> TrajAssignedDuration;
+extern Vector<double> StpTrapzProfParams;
+extern Vector<unsigned long> PROFILE_STEPS;
 
 class CustomStepperMetamorphicManipulator
 {
@@ -25,25 +30,29 @@ class CustomStepperMetamorphicManipulator
 
         CustomStepperMetamorphicManipulator(int stepID, int stepPin, int dirPin, int enblPin, int ledPin, int hallSwitchPin, int spr, int GEAR_FACTOR, int ft );
         
+        // User gives Texec, hAbs
+
+        // Returns hRel
+        double setStepperGoalPositionAssignedDuration(double Texec, double hAbs);                                                       // -> ok
+
         // Returns: StpTrapzProfParams
-        vector<double> returnTrajAssignedDurationProperties(double Texec, double hRel);
+        Vector<double> returnTrajAssignedDurationProperties(double Texec, double hRel);
 
             // Returns: segmentExists
-            bool segmentExists_TrapzVelProfile(vector<double> StpTrapzProfParams);
+            bool segmentExists_TrapzVelProfile(Vector<double> StpTrapzProfParams);
             
             // Returns: PROFILE_STEPS
-            vector<unsigned long> returnTrapzVelProfileSteps(vector<double> StpTrapzProfParams, bool segmentExists);
+            Vector<unsigned long> returnTrapzVelProfileSteps(Vector<double> StpTrapzProfParams, bool segmentExists);
 
             // Returns: delta_t
-            double calculateInitialStepDelay(vector<double> StpTrapzProfParams);
+            double calculateInitialStepDelay(Vector<double> StpTrapzProfParams);
 
         bool setStepperHomePosition();
 
-        double setStepperGoalPositionAssignedDuration(double Texec, double hAbs);
-
+        
 
         // Executes Trajectory
-        bool executeStepperTrapzProfile(bool segmentExists, vector<unsigned long> PROFILE_STEPS, double Texec, double delta_t);
+        bool executeStepperTrapzProfile(bool segmentExists, Vector<unsigned long> PROFILE_STEPS, double Texec, double delta_t);
 
     private:
         int _stepID;
