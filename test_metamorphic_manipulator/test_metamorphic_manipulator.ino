@@ -48,9 +48,7 @@ vector<double> StpTrapzProfParams;
 vector<unsigned long> PROFILE_STEPS;
 vector<double> vector_for_trajectoryVelocity; 
 
-
 uint8_t dxl_id[] = {DXL1_ID, DXL2_ID, DXL3_ID};
-
 
 void setup() {
     Serial.begin(BAUDRATE);
