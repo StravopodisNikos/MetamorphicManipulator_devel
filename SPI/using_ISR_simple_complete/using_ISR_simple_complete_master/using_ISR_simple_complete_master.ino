@@ -1,19 +1,22 @@
 /*
- *  Local Git Directory: ~/Arduino/MetaLunokhod101_Development/SPI/using_ISR_simple_master
- *  Hard linked using  : ln ~/Arduino/SPI/using_ISR_simple/using_ISR_simple_master/using_ISR_simple_master.ino ./using_ISR_simple_master.ino
+ *  Local Git Directory: ~/Arduino/MetaLunokhod101_Development/SPI/using_ISR_simple_complete/ using_ISR_simple_complete_master
+ *  Hard linked using  : ln ~/Arduino/SPI/using_ISR_simple_complete/using_ISR_simple_complete_master/using_ISR_simple_complete_master.ino ./using_ISR_simple_complete_master.ino
  */
 #include <SPI.h>
 #include "PseudoSPIcommMetamorphicManipulator.h"
 
-#define motor_execution_time 10
-
 /*
  * CONFIGURE all the system-dependent-arrays
  */
-int masterID = 0;
-int pseudoIDs[] = {PSEUDO1_ID, PSEUDO2_ID};
-int ssPins[]  = {SSpinPseudo1, SSpinPseudo2};
-byte CURRENT_STATE[sizeof(pseudoIDs)];
+int masterID          = 0;
+const int TOTAL_PSEUDOS_CONNECTED = 2;
+int pseudoIDs[]       = {PSEUDO1_ID, PSEUDO2_ID};
+int ssPins[]          = {SSpinPseudo1, SSpinPseudo2};
+
+byte desiredAnatomy[] = {2, 4};               // initialize ci for desired anatomy(these are the GP values given in setGoalPositionMaster function)
+byte CURRENT_STATE[sizeof(pseudoIDs)];        // empty states initialization array
+bool META_MODES[sizeof(pseudoIDs)];           // empty pseudo mode initialization array
+bool META_EXECS[sizeof(pseudoIDs)];           // empty pseudo mode-exec initialization array
 
 /*
  * CONSTRUCT CLASS OBJECT FOR SPI COMMUNICATION BETWEEN DEVICES
@@ -23,14 +26,24 @@ PseudoSPIcommMetamorphicManipulator MASTER_SPI(Tx, masterID, statusLED_Pin,  MOS
 /*
  * FLAGS USED TO CONTROL LOOPS
  */
-bool metaMode;
-bool metaExecution;
+bool END_METAMORPHOSIS;                       // flag defined by META_MODES
+bool END_ACTION;
+bool metaExecution;                           // flag defined by META_EXECS
 
 /*
  * EXTERN LIBRARY DEFINED VARIABLES
  */
 bool return_function_state;
 byte state_receive_from_slave;
+
+/*
+ * USER SERIAL INPUT VARIABLES
+ */
+String user_input_string;
+int user_input_int;
+const char * meta_exec = "MET";
+const char * act_exec  = "ACT";
+int nl_char_shifting   = 10;
 
 void setup (void)
 {
@@ -55,7 +68,7 @@ void setup (void)
  /*
   * Ping Pseudos-Each pseudo pinged: Blinks(2,500) green Led(ConnectedLED)
   */
-  for (int pseudo_cnt = 0; pseudo_cnt < sizeof(ssPins); pseudo_cnt++) 
+  for (int pseudo_cnt = 0; pseudo_cnt < TOTAL_PSEUDOS_CONNECTED; pseudo_cnt++) 
   {
     return_function_state = MASTER_SPI.connectPseudoMaster(pseudoIDs[pseudo_cnt], ssPins);
     if (return_function_state)
@@ -74,9 +87,10 @@ void setup (void)
   digitalWrite(TXled_Pin,LOW); digitalWrite(RXled_Pin,LOW);
 
   /*
-   * Set flags to start Metamorphosis: Only for now!
+   * Set flags to start Metamorphosis: Only for now! => MUST IMPLEMENTED WITH EXTERNAL INTERRUPTS
    */
-   metaMode = true;
+   END_METAMORPHOSIS = false;
+   END_ACTION = false;
    metaExecution = true;
 }  // end of setup
 
@@ -91,110 +105,123 @@ void loop (void)
   // User input using external interrupts => Set <ROBOT OPERATION MODE>
   // buttonMetamorphosis
   // buttonAction
-
+  Serial.println("Set ROBOT OPERATION MODE: FORMAT <MODE>:");
+  
+  while (Serial.available() == 0) {};
+  user_input_string = Serial.readString();
+  
+  Serial.print("[ USER INPUT ]"); Serial.print("   ->   "); Serial.print(user_input_string);
+    
   /*
    * II. <METAMORPHOSIS>
    */
-   
-  /*
-   * II.1 READ INITIAL STATE OF ALL PSEUDOS CONNECTED 
-   */
-  for (int pseudo_cnt = 0; pseudo_cnt < sizeof(ssPins); pseudo_cnt++) 
-  {
-    // Confirm that last argument is ok! 
-    return_function_state = MASTER_SPI.readInitialStateMaster(pseudoIDs[pseudo_cnt], ssPins, &CURRENT_STATE[pseudo_cnt]);
-    if (return_function_state)
+   if( ( strcmp(user_input_string.c_str(),meta_exec)-nl_char_shifting == 0 ) && (!END_METAMORPHOSIS) )
+   //while( (!END_METAMORPHOSIS) )  // runs if END_METAMORPHOSIS == false AND 
+   {
+    Serial.println("Begin METAMORPHOSIS...");
+    /*
+     * II.1 READ INITIAL STATE OF ALL PSEUDOS CONNECTED 
+     */
+    for (int pseudo_cnt = 0; pseudo_cnt < TOTAL_PSEUDOS_CONNECTED; pseudo_cnt++) 
     {
-        MASTER_SPI.statusLEDblink(2, 500);
-        Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [  LOCKED  ]  SUCCESS");
-    }
-    else
+      // Confirm that last argument is ok! 
+      return_function_state = MASTER_SPI.readInitialStateMaster(pseudoIDs[pseudo_cnt], ssPins, &CURRENT_STATE[pseudo_cnt]);
+      if (return_function_state)
+      {
+          MASTER_SPI.statusLEDblink(2, 500);
+          Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [  LOCKED  ]  SUCCESS");
+      }
+      else
+      {
+          MASTER_SPI.statusLEDblink(4, 250);
+          Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [  LOCKED  ]  FAILED");
+      }
+  
+      if(CURRENT_STATE[pseudo_cnt] != STATE_LOCKED){
+        metaExecution = false;
+      }
+    } // END FOR READ INITIAL STATE
+  
+    
+    // NOW IF ALL LOCKED METAMORPHOSIS CONTINUES PSEUDO PER PSEUDO FOR STEPS 2-5! (NOT STEP BY STEP)
+    if(metaExecution){
+    
+      for (int pseudo_cnt = 0; pseudo_cnt < TOTAL_PSEUDOS_CONNECTED; pseudo_cnt++) 
+      {
+        /*
+         * II.2 IF CURRENT_STATE = LOCKED => SET GOAL POSITION
+         */
+        return_function_state = MASTER_SPI.setGoalPositionMaster(pseudoIDs[pseudo_cnt], ssPins, desiredAnatomy[pseudo_cnt], &CURRENT_STATE[pseudo_cnt] );
+        
+        /*
+         * II.3 IF CURRENT_STATE = READY => UNLOCK  
+         */
+        return_function_state = MASTER_SPI.unlockPseudoMaster(pseudoIDs[pseudo_cnt], ssPins, &CURRENT_STATE[pseudo_cnt]);
+        
+        /*
+         * II.4 IF CURRENT_STATE = UNLOCKED => MOVE  
+         */
+        return_function_state = MASTER_SPI.movePseudoMaster(pseudoIDs[pseudo_cnt], ssPins, &CURRENT_STATE[pseudo_cnt]);
+        
+        /*
+         * II.5 IF CURRENT_STATE = IN_POSITION => LOCK  
+         */   
+        return_function_state = MASTER_SPI.lockPseudoMaster(pseudoIDs[pseudo_cnt], ssPins, &CURRENT_STATE[pseudo_cnt]);
+       
+      }
+  
+      /*
+       * II.6 IF ALL_LOCKED MASTER ASKS USER WHAT TO DO AND COMMANDS SLAVE  
+       */  
+      // ACCORDING TO SLAVE ANSWER WE CHANGE THE FLAGS TO TERMINATE/REPEAT LOOP II(<METAMORPHOSIS>)
+      Serial.println("To REPEAT <METAMORPHOSIS> press 91:");
+      Serial.println("To EXIT   <METAMORPHOSIS> press 9 :");
+      
+      while (Serial.available() == 0) {};
+      user_input_int = Serial.read();
+  
+      Serial.print("[ USER INPUT ]"); Serial.print("   ->   "); Serial.print(user_input_int);
+       
+      for (int pseudo_cnt = 0; pseudo_cnt < TOTAL_PSEUDOS_CONNECTED; pseudo_cnt++) 
+      {
+        return_function_state = MASTER_SPI.continueMetaExecutionMaster( pseudoIDs[pseudo_cnt], ssPins,(byte)  user_input_int, &META_MODES[pseudo_cnt],&CURRENT_STATE[pseudo_cnt] );
+        if (return_function_state)
+        {
+          // metamorphosis success
+          
+          // Change flag for <Metamorphosis> Mode
+          if(META_MODES[pseudo_cnt] == true){
+            END_METAMORPHOSIS = true;  // user wants to exit         
+          }
+          else
+          {
+            END_METAMORPHOSIS = false; // user wants to repeat
+          }
+        }
+        else
+        {
+          // metamorphosis error: 1. not appropriate state received 2. not steppers locked
+        }
+  
+      }
+    
+    }// END IF META EXECUTION
+    else // START IF META ERROR
     {
-        MASTER_SPI.statusLEDblink(4, 250);
-        Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [  LOCKED  ]  FAILED");
-    }
-  } // END FOR READ INITIAL STATE
+        // NOT READY
+        Serial.println("META ERROR NOT READY YET");        
+    } // END IF META ERROR
 
-  // NOW METAMORPHOSIS CONTINUES PSEUDO PER PSEUDO FOR STEPS 2-5! (NOT STEP BY STEP)
-
-  for (int pseudo_cnt = 0; pseudo_cnt < sizeof(ssPins); pseudo_cnt++) 
+   } // END IF META MODE  
+  
+  /*
+   * III. <ACTION>
+   */
+  if( ( strcmp(user_input_string.c_str(),act_exec)-nl_char_shifting == 0 ) && (END_METAMORPHOSIS) && (!END_ACTION) )
   {
-  /*
-   * II.2 IF CURRENT_STATE = LOCKED => SET GOAL POSITION
-   */
-      do{
-          return_function_state = MASTER_SPI.setGoalPositionMaster(pseudoIDs[pseudo_cnt],ssPins, byte GP, &CURRENT_STATE[pseudo_cnt] )
-      }while(!return_function_state);
-  /*
-   * II.3 IF CURRENT_STATE = READY => UNLOCK  
-   */
+    Serial.println("Begin ACTION...");
 
-  /*
-   * II.4 IF CURRENT_STATE = UNLOCKED => MOVE  
-   */
-
-  /*
-   * II.5 IF CURRENT_STATE = IN_POSITION => LOCK  
-   */   
-   
+    END_ACTION = true;
   }
-
-  /*
-   * II.6 IF ALL_LOCKED MASTER ASKS USER WHAT TO DO AND COMMANDS SLAVE  
-   */  
-  // ACCORDING TO SLAVE ANSWER WE CHANGE THE FLAGS TO TERMINATE/REPEAT LOOP II(<METAMORPHOSIS>)
-
-  
-  
-  // enable Slave Select
-  digitalWrite(SSpinPseudo1, LOW);    
-
-
-  do{
-    state_receive_from_slave = transferAndWait ((byte)CMD_MOVE);
-
-    //CURRENT_STATE = (int) state_receive_from_slave;
-
-    delay(100);
-    
-  }while(! (CURRENT_STATE == IN_POSITION));
-  Serial.print ("New Motor State:"); Serial.println (state_receive_from_slave, DEC);
-  
-  // disable Slave Select
-  digitalWrite(SSpinPseudo1, HIGH);
-  
-  
-
-  if((CURRENT_STATE == IN_POSITION))
-  {
-  Serial.println("NEW COMMAND");
-  // enable Slave Select
-  digitalWrite(SSpinPseudo1, LOW);    
-
-  do{
-    
-    state_receive_from_slave = transferAndWait ((byte)CMD_LOCK);
-
-    //CURRENT_STATE = (int) state_receive_from_slave;
-
-    delay(100);
-    
-  }while(! (CURRENT_STATE == STATE_LOCKED) );
-  
-  Serial.print ("New Motor State:"); Serial.println (state_receive_from_slave, DEC);
-
-  
-  // disable Slave Select
-  transferAndWait (0);
-  digitalWrite(SSpinPseudo1, HIGH);
-  }
-  
-  delay (2000);  
-}  
-
-byte transferAndWait (byte what)
-{
-  byte a = SPI.transfer (what);
-  delayMicroseconds (10);
-  return a;
-} 
+     
+} // END LOOP  
