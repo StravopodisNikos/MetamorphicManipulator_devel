@@ -9,11 +9,17 @@
  * CONFIGURE all the system-dependent-arrays
  */
 int masterID          = 0;
+/*
 const int TOTAL_PSEUDOS_CONNECTED = 2;
 int pseudoIDs[]       = {PSEUDO1_ID, PSEUDO2_ID};
 int ssPins[]          = {SSpinPseudo1, SSpinPseudo2};
+byte desiredAnatomy[] = {2,4};                  // initialize ci for desired anatomy(these are the GP values given in setGoalPositionMaster function)
 
-byte desiredAnatomy[] = {2, 4};               // initialize ci for desired anatomy(these are the GP values given in setGoalPositionMaster function)
+*/
+const int TOTAL_PSEUDOS_CONNECTED = 1;
+int pseudoIDs[]       = {PSEUDO1_ID};
+int ssPins[]          = {SSpinPseudo1};
+byte desiredAnatomy[] = {6};                  // initialize ci for desired anatomy(these are the GP values given in setGoalPositionMaster function)
 byte CURRENT_STATE[sizeof(pseudoIDs)];        // empty states initialization array
 bool META_MODES[sizeof(pseudoIDs)];           // empty pseudo mode initialization array
 bool META_EXECS[sizeof(pseudoIDs)];           // empty pseudo mode-exec initialization array
@@ -48,7 +54,8 @@ int nl_char_shifting   = 10;
 void setup (void)
 {
   Serial.begin (SERIAL_BAUDRATE);
-/*
+
+// MASTER PINMODE
   pinMode(SCK_NANO, OUTPUT);
   pinMode(MOSI_NANO, OUTPUT);
   pinMode(MISO_NANO, INPUT);
@@ -57,7 +64,7 @@ void setup (void)
     pinMode(ssPins[i], OUTPUT);
     pinMode(ssPins[i], HIGH);
   }
-*/
+
 
  /*
   * Start SPI Com Protocol
@@ -81,7 +88,7 @@ void setup (void)
         MASTER_SPI.statusLEDblink(4, 250);
         Serial.print("[   MASTER:  ]"); Serial.print(" CONNECTED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   FAILED");
     }
-    
+    delay(1);
   } // END IF PING
   
   digitalWrite(TXled_Pin,LOW); digitalWrite(RXled_Pin,LOW);
@@ -125,16 +132,16 @@ void loop (void)
     for (int pseudo_cnt = 0; pseudo_cnt < TOTAL_PSEUDOS_CONNECTED; pseudo_cnt++) 
     {
       // Confirm that last argument is ok! 
-      return_function_state = MASTER_SPI.readInitialStateMaster(pseudoIDs[pseudo_cnt], ssPins, &CURRENT_STATE[pseudo_cnt]);
+      return_function_state = MASTER_SPI.readCurrentStateMaster(pseudoIDs[pseudo_cnt], ssPins, &CURRENT_STATE[pseudo_cnt]);
       if (return_function_state)
       {
           MASTER_SPI.statusLEDblink(2, 500);
-          Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [  LOCKED  ]  SUCCESS");
+          Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [     LOCKED     ]  SUCCESS");
       }
       else
       {
           MASTER_SPI.statusLEDblink(4, 250);
-          Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [  LOCKED  ]  FAILED");
+          Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [     LOCKED     ]  FAILED");
       }
   
       if(CURRENT_STATE[pseudo_cnt] != STATE_LOCKED){
@@ -152,30 +159,66 @@ void loop (void)
          * II.2 IF CURRENT_STATE = LOCKED => SET GOAL POSITION
          */
         return_function_state = MASTER_SPI.setGoalPositionMaster(pseudoIDs[pseudo_cnt], ssPins, desiredAnatomy[pseudo_cnt], &CURRENT_STATE[pseudo_cnt] );
-        
+        if (return_function_state)
+        {
+            MASTER_SPI.statusLEDblink(6, 500);
+            Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [      READY     ]  SUCCESS");
+        }
+        else
+        {
+            MASTER_SPI.statusLEDblink(8, 250);
+            Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [      READY     ]  FAILED");
+        }
         /*
          * II.3 IF CURRENT_STATE = READY => UNLOCK  
          */
         return_function_state = MASTER_SPI.unlockPseudoMaster(pseudoIDs[pseudo_cnt], ssPins, &CURRENT_STATE[pseudo_cnt]);
-        
+        if (return_function_state)
+        {
+            MASTER_SPI.statusLEDblink(3, 500);
+            Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [    UNLOCKED    ]  SUCCESS");
+        }
+        else
+        {
+            MASTER_SPI.statusLEDblink(5, 250);
+            Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [    UNLOCKED    ]  FAILED");
+        }        
         /*
          * II.4 IF CURRENT_STATE = UNLOCKED => MOVE  
          */
         return_function_state = MASTER_SPI.movePseudoMaster(pseudoIDs[pseudo_cnt], ssPins, &CURRENT_STATE[pseudo_cnt]);
-        
+        if (return_function_state)
+        {
+            MASTER_SPI.statusLEDblink(7, 500);
+            Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [  IN_POSITION   ]  SUCCESS");
+        }
+        else
+        {
+            MASTER_SPI.statusLEDblink(9, 250);
+            Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [  IN_POSITION   ]  FAILED");
+        }         
         /*
          * II.5 IF CURRENT_STATE = IN_POSITION => LOCK  
          */   
         return_function_state = MASTER_SPI.lockPseudoMaster(pseudoIDs[pseudo_cnt], ssPins, &CURRENT_STATE[pseudo_cnt]);
-       
+        if (return_function_state)
+        {
+            MASTER_SPI.statusLEDblink(2, 500);
+            Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [     LOCKED     ]  SUCCESS");
+        } 
+        else
+        {
+            MASTER_SPI.statusLEDblink(4, 250);
+            Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [     LOCKED     ]  FAILED");
+        } 
       }
   
       /*
        * II.6 IF ALL_LOCKED MASTER ASKS USER WHAT TO DO AND COMMANDS SLAVE  
        */  
       // ACCORDING TO SLAVE ANSWER WE CHANGE THE FLAGS TO TERMINATE/REPEAT LOOP II(<METAMORPHOSIS>)
-      Serial.println("To REPEAT <METAMORPHOSIS> press 91:");
-      Serial.println("To EXIT   <METAMORPHOSIS> press 9 :");
+      Serial.println("To REPEAT <METAMORPHOSIS> press 80:");
+      Serial.println("To EXIT   <METAMORPHOSIS> press 81 :");
       
       while (Serial.available() == 0) {};
       user_input_int = Serial.read();
