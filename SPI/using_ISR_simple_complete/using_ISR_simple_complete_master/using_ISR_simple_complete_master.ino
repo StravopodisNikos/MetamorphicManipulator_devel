@@ -2,6 +2,7 @@
  *  Local Git Directory: ~/Arduino/MetaLunokhod101_Development/SPI/using_ISR_simple_complete/ using_ISR_simple_complete_master
  *  Hard linked using  : ln ~/Arduino/SPI/using_ISR_simple_complete/using_ISR_simple_complete_master/using_ISR_simple_complete_master.ino ./using_ISR_simple_complete_master.ino
  */
+ 
 #include <SPI.h>
 #include "PseudoSPIcommMetamorphicManipulator.h"
 
@@ -14,12 +15,12 @@ const int TOTAL_PSEUDOS_CONNECTED = 2;
 int pseudoIDs[]       = {PSEUDO1_ID, PSEUDO2_ID};
 int ssPins[]          = {SSpinPseudo1, SSpinPseudo2};
 byte desiredAnatomy[] = {2,4};                  // initialize ci for desired anatomy(these are the GP values given in setGoalPositionMaster function)
-
 */
 const int TOTAL_PSEUDOS_CONNECTED = 1;
 int pseudoIDs[]       = {PSEUDO1_ID};
 int ssPins[]          = {SSpinPseudo1};
-byte desiredAnatomy[] = {6};                  // initialize ci for desired anatomy(these are the GP values given in setGoalPositionMaster function)
+byte desiredAnatomy[] = {7};                  // initialize ci for desired anatomy(these are the GP values given in setGoalPositionMaster function)
+
 byte CURRENT_STATE[sizeof(pseudoIDs)];        // empty states initialization array
 bool META_MODES[sizeof(pseudoIDs)];           // empty pseudo mode initialization array
 bool META_EXECS[sizeof(pseudoIDs)];           // empty pseudo mode-exec initialization array
@@ -55,7 +56,7 @@ void setup (void)
 {
   Serial.begin (SERIAL_BAUDRATE);
 
-// MASTER PINMODE
+// MASTER PINMODE 
   pinMode(SCK_NANO, OUTPUT);
   pinMode(MOSI_NANO, OUTPUT);
   pinMode(MISO_NANO, INPUT);
@@ -109,9 +110,7 @@ void loop (void)
   /*
    * I. 
    */
-  // User input using external interrupts => Set <ROBOT OPERATION MODE>
-  // buttonMetamorphosis
-  // buttonAction
+
   Serial.println("Set ROBOT OPERATION MODE: FORMAT <MODE>:");
   
   while (Serial.available() == 0) {};
@@ -122,8 +121,8 @@ void loop (void)
   /*
    * II. <METAMORPHOSIS>
    */
-   if( ( strcmp(user_input_string.c_str(),meta_exec)-nl_char_shifting == 0 ) && (!END_METAMORPHOSIS) )
-   //while( (!END_METAMORPHOSIS) )  // runs if END_METAMORPHOSIS == false AND 
+   //if( ( strcmp(user_input_string.c_str(),meta_exec)-nl_char_shifting == 0 ) && (!END_METAMORPHOSIS) )
+   while( ( strcmp(user_input_string.c_str(),meta_exec)-nl_char_shifting == 0 ) && (!END_METAMORPHOSIS) ) 
    {
     Serial.println("Begin METAMORPHOSIS...");
     /*
@@ -131,7 +130,6 @@ void loop (void)
      */
     for (int pseudo_cnt = 0; pseudo_cnt < TOTAL_PSEUDOS_CONNECTED; pseudo_cnt++) 
     {
-      // Confirm that last argument is ok! 
       return_function_state = MASTER_SPI.readCurrentStateMaster(pseudoIDs[pseudo_cnt], ssPins, &CURRENT_STATE[pseudo_cnt]);
       if (return_function_state)
       {
@@ -143,8 +141,17 @@ void loop (void)
           MASTER_SPI.statusLEDblink(4, 250);
           Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [     LOCKED     ]  FAILED");
       }
-  
-      if(CURRENT_STATE[pseudo_cnt] != STATE_LOCKED){
+
+      Serial.print("CURRENT_STATE="); Serial.println(CURRENT_STATE[pseudo_cnt]); 
+      Serial.print("metaExecution");  Serial.println(metaExecution); 
+
+      // ONLY FOR DEBUGGING
+      if ( (CURRENT_STATE[pseudo_cnt] == META_FINISHED))
+      {
+        CURRENT_STATE[pseudo_cnt] = META_REPEAT;
+      }
+      
+      if( (CURRENT_STATE[pseudo_cnt] != STATE_LOCKED) && (CURRENT_STATE[pseudo_cnt] != META_REPEAT) ){
         metaExecution = false;
       }
     } // END FOR READ INITIAL STATE
@@ -217,33 +224,40 @@ void loop (void)
        * II.6 IF ALL_LOCKED MASTER ASKS USER WHAT TO DO AND COMMANDS SLAVE  
        */  
       // ACCORDING TO SLAVE ANSWER WE CHANGE THE FLAGS TO TERMINATE/REPEAT LOOP II(<METAMORPHOSIS>)
-      Serial.println("To REPEAT <METAMORPHOSIS> press 80:");
-      Serial.println("To EXIT   <METAMORPHOSIS> press 81 :");
+      Serial.println("To REPEAT <METAMORPHOSIS> press 81:");
+      Serial.println("To EXIT   <METAMORPHOSIS> press 80 :");
       
       while (Serial.available() == 0) {};
-      user_input_int = Serial.read();
+      user_input_int = Serial.parseInt();
   
-      Serial.print("[ USER INPUT ]"); Serial.print("   ->   "); Serial.print(user_input_int);
+      Serial.print("[ USER INPUT ]"); Serial.print("   ->   "); Serial.println(user_input_int);
        
       for (int pseudo_cnt = 0; pseudo_cnt < TOTAL_PSEUDOS_CONNECTED; pseudo_cnt++) 
       {
-        return_function_state = MASTER_SPI.continueMetaExecutionMaster( pseudoIDs[pseudo_cnt], ssPins,(byte)  user_input_int, &META_MODES[pseudo_cnt],&CURRENT_STATE[pseudo_cnt] );
+        return_function_state = MASTER_SPI.continueMetaExecutionMaster( pseudoIDs[pseudo_cnt], ssPins,(byte)  user_input_int, &END_METAMORPHOSIS,&CURRENT_STATE[pseudo_cnt] );
         if (return_function_state)
         {
-          // metamorphosis success
-          
-          // Change flag for <Metamorphosis> Mode
-          if(META_MODES[pseudo_cnt] == true){
-            END_METAMORPHOSIS = true;  // user wants to exit         
-          }
-          else
-          {
-            END_METAMORPHOSIS = false; // user wants to repeat
-          }
+            // metamorphosis success
+         
+            // Master commands Slave to save current gloabal variables to its EEPROM
+            if (END_METAMORPHOSIS)
+            {
+              Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [    SAVED EEPROM     ]  SUCCESS");
+              Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [ EXITS METAMORPHOSIS ]  SUCCESS");      
+            }
+            else
+            {
+              Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [ REPEATS METAMORPHOSIS ]  SUCCESS");                    
+            }
+            
+            // Torques off motor(must check that motor current state is locked!)
+
+            // Powers off NANO
         }
         else
         {
-          // metamorphosis error: 1. not appropriate state received 2. not steppers locked
+          // metamorphosis error: 1. not appropriate state received (META_FINISHED or META_REPEAT) 2. not steppers locked
+              Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [      METAMORPHOSIS     ]  FAILED");        
         }
   
       }
@@ -252,15 +266,16 @@ void loop (void)
     else // START IF META ERROR
     {
         // NOT READY
-        Serial.println("META ERROR NOT READY YET");        
+        Serial.println("META ERROR NOT READY YET...");        
     } // END IF META ERROR
 
    } // END IF META MODE  
   
   /*
-   * III. <ACTION>
+   * III. <ACTION> -> Permisssible state from Metamorphosis Execution: META_FINISHED 
    */
-  if( ( strcmp(user_input_string.c_str(),act_exec)-nl_char_shifting == 0 ) && (END_METAMORPHOSIS) && (!END_ACTION) )
+  //if( ( strcmp(user_input_string.c_str(),act_exec)-nl_char_shifting == 0 ) && (END_METAMORPHOSIS) && (!END_ACTION) )
+  while( ( strcmp(user_input_string.c_str(),act_exec)-nl_char_shifting == 0 ) && (END_METAMORPHOSIS) && (!END_ACTION) )
   {
     Serial.println("Begin ACTION...");
 

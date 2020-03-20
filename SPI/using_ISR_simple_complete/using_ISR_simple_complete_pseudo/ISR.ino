@@ -1,4 +1,8 @@
 /*
+ *  Local Git Directory: ~/Arduino/MetaLunokhod101_Development/SPI/using_ISR_simple_complete/using_ISR_simple_complete_pseudo
+ *  Hard linked using  : ln ~/Arduino/SPI/using_ISR_simple_complete/using_ISR_simple_complete_pseudo/ISR.ino ./ISR.ino
+ */
+/*
  *  ISR always listens to MASTERS bytes sent!
  *  Accordingly changes flags for main loop code to execute!
  */
@@ -113,6 +117,34 @@ ISR (SPI_STC_vect)
             UNLOCK_MOTOR = false;           
         }
         break; 
+
+      case CMD_EXIT_META_EXEC:
+        SAVE_GLOBALS_TO_EEPROM = true;
+
+        if (!globals_saved_to_eeprom)
+        {
+            SPDR = IS_TALKING;
+        }
+        else
+        {
+            SPDR = motor_new_state;
+            SAVE_GLOBALS_TO_EEPROM = false;
+        }
+        break;
+
+      case CMD_CONT_META_EXEC:
+        INDICATE_META_REPEATS = true;
+
+        if (!leds_indicated_meta_repeats)
+        {
+            SPDR = IS_TALKING;
+        }
+        else
+        {
+            SPDR = motor_new_state;
+            INDICATE_META_REPEATS = false;
+        }
+        break;
         
       default:
         break;

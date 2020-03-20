@@ -1,6 +1,6 @@
 /*
  *  Local Git Directory: ~/Arduino/MetaLunokhod101_Development/SPI/using_ISR_simple_complete/using_ISR_simple_complete_pseudo
- *  Hard linked using  : ln ~/Arduino/SPI/using_ISR_simple_complete/using_ISR_simple_complete_pseudo/using_ISR_simple_complete_pseudo.ino ./using_ISR_simple_pseudo.ino
+ *  Hard linked using  : ln ~/Arduino/SPI/using_ISR_simple_complete/using_ISR_simple_complete_pseudo/using_ISR_simple_complete_pseudo.ino ./using_ISR_simple_complete_pseudo.ino
  */
 #include <SPI.h>
 #include "PseudoSPIcommMetamorphicManipulator.h"
@@ -16,7 +16,6 @@ int ssPins[1] = {SSpinPseudo1};
  */
 bool result;
 bool return_function_state;
-byte current_slave_state;
 
  unsigned long time_now_micros;
 /* 
@@ -30,6 +29,8 @@ volatile bool UNLOCK_MOTOR          = false;
 volatile bool GIVE_CS               = false;
 volatile bool CONNECT2MASTER        = false;
 volatile bool SET_GOAL_POS          = false;
+volatile bool SAVE_GLOBALS_TO_EEPROM  = false;
+volatile bool INDICATE_META_REPEATS   = false;
 
 //  STATES INFO:  LOOP->ISR (SLAVE->MASTER)
 volatile bool motor_finished        = false;
@@ -38,17 +39,20 @@ volatile bool motor_unlocked        = false;
 volatile bool current_state_sent    = false;
 volatile bool connected2master      = false;
 volatile bool goal_position_set     = false;
+volatile bool globals_saved_to_eeprom     = false;
+volatile bool leds_indicated_meta_repeats = false;
 
-volatile byte motor_new_state = STATE_LOCKED;       // Initial state assumed for tests
+volatile byte motor_new_state;       
 volatile byte goal_ci;
 volatile byte slaveID;
 
 /*
- *   MOTOR MOVEMENT VARIABLES
+ *   MOTOR MOVEMENT VARIABLES - ALWAYS INITIALIZED BY READING EEPROM AT setup()
  */
-uint32_t  currentDirStatusPseudo  = HIGH;
-int  currentMoveRelPseudo         = 100;
-int  currentAbsPosPseudo          = PI/2;
+byte  currentDirStatusPseudo=LOW;
+int  currentMoveRelPseudo           = 0;    // can be initialized to 0 and change after 1st execution
+int  currentAbsPosPseudo;
+
 int  RELATIVE_STEPS_TO_MOVE;
 int  theta_p_current_steps;
 float theta_p_goal;
@@ -69,7 +73,18 @@ void setup (void)
   {
     pinMode(ssPins[i], INPUT);
   }  
+// SLAVE PINMODE FOR STEPPER
+  pinMode(stepPin_NANO, OUTPUT);
+  pinMode(dirPin_NANO, OUTPUT);
+  pinMode(enabPin_NANO, OUTPUT);
+  pinMode(hallSwitch_Pin, INPUT);
+  pinMode(RELAY_lock_Pin, OUTPUT);
   
+  digitalWrite(stepPin_NANO, LOW);
+  digitalWrite(enabPin_NANO, LOW);
+  digitalWrite(dirPin_NANO, LOW);  
+  
+// SLAVE ISR CONFIGURATION
   SPCR |= _BV(SPE);           // turn on SPI in slave mode
 
   SPCR |= _BV(SPIE);          // turn on interrupts
@@ -78,6 +93,20 @@ void setup (void)
 
   //SLAVE1_SPI.setupEEPROMslave( pseudoID, PI/2, -PI/2, 0.2617994);   // LAST EXECUTION Wed 18.3.2020
 
+// SLAVE READS VALUES FROM EEPROM BEFORE START EXECUTION
+  SLAVE1_SPI.readEEPROMsettingsSlave(&motor_new_state , &currentDirStatusPseudo, &currentAbsPosPseudo);
+
+  Serial.println("INITIAL STEPPER VALUES:");
+  Serial.print("motor_new_state        = "); Serial.println(motor_new_state);
+  Serial.print("currentDirStatusPseudo = "); Serial.println(currentDirStatusPseudo);
+  Serial.print("currentAbsPosPseudo    = "); Serial.println(currentAbsPosPseudo);
+
+  delay(1000);
+// HOMING
+  currentDirStatusPseudo=LOW;
+  digitalWrite(dirPin_NANO, currentDirStatusPseudo); 
+  SLAVE1_SPI.setHomePositionSlave(&currentAbsPosPseudo);
+  
 }  // end of setup
 
 
@@ -145,7 +174,6 @@ void loop (void)
   if ( LOCK_MOTOR )
   {
         // Calls function lockPseudoSlave
-        Serial.print("state when lock_motor = "); Serial.println(motor_new_state);
         return_function_state = SLAVE1_SPI.lockPseudoSlave(&motor_new_state );
        
         if (return_function_state)
@@ -164,7 +192,6 @@ void loop (void)
   if ( UNLOCK_MOTOR )
   {
         // Calls function unlockPseudoSlave
-        Serial.print("state when unlock_motor = "); Serial.println(motor_new_state);
         return_function_state = SLAVE1_SPI.unlockPseudoSlave(&motor_new_state );
         
         if (return_function_state)
@@ -180,5 +207,36 @@ void loop (void)
         }           
   }
 
-  delay(100);
+  if ( SAVE_GLOBALS_TO_EEPROM )     // saves global variables to EEPROM and indicates meta_exits
+  {
+        // Calls function saveEEPROMsettingsSlave
+        motor_new_state = META_FINISHED;
+        return_function_state = true;
+        //return_function_state = SLAVE1_SPI.saveEEPROMsettingsSlave(&motor_new_state, currentDirStatusPseudo, currentAbsPosPseudo);
+
+        if (return_function_state)
+        {  
+          // LED indicate that Slave saved glabals to EEPROM (TxRx, 2X1000)
+          Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.print("   ]   [   CURRENT STATUS:"); Serial.print(EXIT_METAMORPHOSIS); Serial.println("   ]   SUCCESS");  
+          SLAVE1_SPI.txrxLEDSblink(2, 1000);
+          globals_saved_to_eeprom = true;
+        }
+        else
+        {
+          Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.print("   ]   [   CURRENT STATUS:"); Serial.print(EXIT_METAMORPHOSIS); Serial.println("   ]   FAILED");  
+          SLAVE1_SPI.txrxLEDSblink(4, 500);
+          globals_saved_to_eeprom = false;
+        }
+  }
+
+  if ( INDICATE_META_REPEATS )      // only indicates meta repeats, global not need to be saved - no fn executed
+  {
+        // LED indicate that Slave repeats (TxRx, 4X1000)
+        SLAVE1_SPI.txrxLEDSblink(3, 1500);
+        leds_indicated_meta_repeats = true;
+        motor_new_state = META_REPEAT;
+        
+  }
+
+  delay(100);           // specify frequency slave receives/responds
 }  // end of loop
