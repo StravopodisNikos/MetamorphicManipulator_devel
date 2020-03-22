@@ -19,7 +19,8 @@ byte desiredAnatomy[] = {2,4};                  // initialize ci for desired ana
 const int TOTAL_PSEUDOS_CONNECTED = 1;
 int pseudoIDs[]       = {PSEUDO1_ID};
 int ssPins[]          = {SSpinPseudo1};
-byte desiredAnatomy[] = {7};                  // initialize ci for desired anatomy(these are the GP values given in setGoalPositionMaster function)
+byte desiredAnatomy[] = {8,10,7};                  // initialize ci for desired anatomy(these are the GP values given in setGoalPositionMaster function)
+int anatomy_counter   = 0;                        // just to check repeat mode
 
 byte CURRENT_STATE[sizeof(pseudoIDs)];        // empty states initialization array
 bool META_MODES[sizeof(pseudoIDs)];           // empty pseudo mode initialization array
@@ -110,7 +111,6 @@ void loop (void)
   /*
    * I. 
    */
-
   Serial.println("Set ROBOT OPERATION MODE: FORMAT <MODE>:");
   
   while (Serial.available() == 0) {};
@@ -142,38 +142,42 @@ void loop (void)
           Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [     LOCKED     ]  FAILED");
       }
 
-      Serial.print("CURRENT_STATE="); Serial.println(CURRENT_STATE[pseudo_cnt]); 
-      Serial.print("metaExecution");  Serial.println(metaExecution); 
+      Serial.print("CURRENT_STATE = "); Serial.println(CURRENT_STATE[pseudo_cnt]); 
+      Serial.print("metaExecution1 = ");  Serial.println(metaExecution); 
 
-      // ONLY FOR DEBUGGING
-      if ( (CURRENT_STATE[pseudo_cnt] == META_FINISHED))
-      {
-        CURRENT_STATE[pseudo_cnt] = META_REPEAT;
+      // Doesn't execute Metamorphosis if neither of these 3 states is returned
+      if( (CURRENT_STATE[pseudo_cnt] != STATE_LOCKED) && (CURRENT_STATE[pseudo_cnt] != META_REPEAT) && (CURRENT_STATE[pseudo_cnt] != META_FINISHED) ){
+        metaExecution = false;
+        Serial.println("metaExecution is false gamw to myalo sou");
+      }
+      if( (CURRENT_STATE[pseudo_cnt] == META_REPEAT) || (CURRENT_STATE[pseudo_cnt] == META_FINISHED) ){
+        CURRENT_STATE[pseudo_cnt] = STATE_LOCKED;
+        metaExecution = true;
+        Serial.println("metaExecution is true and state is STATE_LOCKED");
       }
       
-      if( (CURRENT_STATE[pseudo_cnt] != STATE_LOCKED) && (CURRENT_STATE[pseudo_cnt] != META_REPEAT) ){
-        metaExecution = false;
-      }
     } // END FOR READ INITIAL STATE
-  
     
     // NOW IF ALL LOCKED METAMORPHOSIS CONTINUES PSEUDO PER PSEUDO FOR STEPS 2-5! (NOT STEP BY STEP)
     if(metaExecution){
-    
+      
       for (int pseudo_cnt = 0; pseudo_cnt < TOTAL_PSEUDOS_CONNECTED; pseudo_cnt++) 
       {
+        Serial.println("Started 2-5 for");
+        Serial.print("anatomy_counter = "); Serial.println(anatomy_counter);
         /*
          * II.2 IF CURRENT_STATE = LOCKED => SET GOAL POSITION
          */
-        return_function_state = MASTER_SPI.setGoalPositionMaster(pseudoIDs[pseudo_cnt], ssPins, desiredAnatomy[pseudo_cnt], &CURRENT_STATE[pseudo_cnt] );
+        //CURRENT_STATE[pseudo_cnt] = STATE_LOCKED; // for code convenience
+        return_function_state = MASTER_SPI.setGoalPositionMaster(pseudoIDs[pseudo_cnt], ssPins, &desiredAnatomy[anatomy_counter], &CURRENT_STATE[pseudo_cnt] );
         if (return_function_state)
         {
-            MASTER_SPI.statusLEDblink(6, 500);
+            //MASTER_SPI.statusLEDblink(6, 500);
             Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [      READY     ]  SUCCESS");
         }
         else
         {
-            MASTER_SPI.statusLEDblink(8, 250);
+            //MASTER_SPI.statusLEDblink(8, 250);
             Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [      READY     ]  FAILED");
         }
         /*
@@ -182,12 +186,12 @@ void loop (void)
         return_function_state = MASTER_SPI.unlockPseudoMaster(pseudoIDs[pseudo_cnt], ssPins, &CURRENT_STATE[pseudo_cnt]);
         if (return_function_state)
         {
-            MASTER_SPI.statusLEDblink(3, 500);
+            //MASTER_SPI.statusLEDblink(3, 500);
             Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [    UNLOCKED    ]  SUCCESS");
         }
         else
         {
-            MASTER_SPI.statusLEDblink(5, 250);
+            //MASTER_SPI.statusLEDblink(5, 250);
             Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [    UNLOCKED    ]  FAILED");
         }        
         /*
@@ -196,12 +200,12 @@ void loop (void)
         return_function_state = MASTER_SPI.movePseudoMaster(pseudoIDs[pseudo_cnt], ssPins, &CURRENT_STATE[pseudo_cnt]);
         if (return_function_state)
         {
-            MASTER_SPI.statusLEDblink(7, 500);
+            //MASTER_SPI.statusLEDblink(7, 500);
             Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [  IN_POSITION   ]  SUCCESS");
         }
         else
         {
-            MASTER_SPI.statusLEDblink(9, 250);
+            //MASTER_SPI.statusLEDblink(9, 250);
             Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [  IN_POSITION   ]  FAILED");
         }         
         /*
@@ -210,12 +214,12 @@ void loop (void)
         return_function_state = MASTER_SPI.lockPseudoMaster(pseudoIDs[pseudo_cnt], ssPins, &CURRENT_STATE[pseudo_cnt]);
         if (return_function_state)
         {
-            MASTER_SPI.statusLEDblink(2, 500);
+            //MASTER_SPI.statusLEDblink(2, 500);
             Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [     LOCKED     ]  SUCCESS");
         } 
         else
         {
-            MASTER_SPI.statusLEDblink(4, 250);
+            //MASTER_SPI.statusLEDblink(4, 250);
             Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [     LOCKED     ]  FAILED");
         } 
       }
@@ -248,6 +252,14 @@ void loop (void)
             else
             {
               Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [ REPEATS METAMORPHOSIS ]  SUCCESS");                    
+              if (anatomy_counter == 2)
+              {
+                anatomy_counter == 0;
+              }
+              else
+              {
+                anatomy_counter++;
+              }
             }
             
             // Torques off motor(must check that motor current state is locked!)
@@ -274,12 +286,21 @@ void loop (void)
   /*
    * III. <ACTION> -> Permisssible state from Metamorphosis Execution: META_FINISHED 
    */
-  //if( ( strcmp(user_input_string.c_str(),act_exec)-nl_char_shifting == 0 ) && (END_METAMORPHOSIS) && (!END_ACTION) )
-  while( ( strcmp(user_input_string.c_str(),act_exec)-nl_char_shifting == 0 ) && (END_METAMORPHOSIS) && (!END_ACTION) )
+  if( ( strcmp(user_input_string.c_str(),act_exec)-nl_char_shifting == 0 ) && (END_METAMORPHOSIS) && (!END_ACTION) )
+  //while( ( strcmp(user_input_string.c_str(),act_exec)-nl_char_shifting == 0 ) && (END_METAMORPHOSIS) && (!END_ACTION) )
   {
     Serial.println("Begin ACTION...");
 
     END_ACTION = true;
   }
-     
+
+  if (anatomy_counter == 2)
+  {
+    anatomy_counter == 0;
+  }
+  else
+  {
+    anatomy_counter++;
+  }
+  END_METAMORPHOSIS = false;
 } // END LOOP  
