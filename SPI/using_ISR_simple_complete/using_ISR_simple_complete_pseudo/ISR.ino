@@ -9,15 +9,12 @@
 
 ISR (SPI_STC_vect)
 {
-  byte c = SPDR;                  // BYTE sent from MASTER 
-
-  //Serial.print("command in ISR = "); Serial.println(c);
-  
+  byte c = SPDR;                  // BYTE sent from MASTER   
   switch (c)
   {
       // ALL AVAILABLE COMMANDS MUST BE CHECKED
       case 0:
-        command = c;
+        //command = c;
         SPDR = 0;
         break;
         
@@ -58,7 +55,7 @@ ISR (SPI_STC_vect)
         SET_GOAL_POS = true;
 
         goal_ci = c;
-        
+
         // ISR <- loop  
         if(!goal_position_set)        // read flag from loop that relates to new state
         {
@@ -147,6 +144,9 @@ ISR (SPI_STC_vect)
         break;
         
       default:
+
+          SPDR = IS_TALKING;
+          
         break;
   } //switch
 
