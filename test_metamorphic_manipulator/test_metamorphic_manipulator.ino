@@ -13,11 +13,11 @@
  *  February 2020
  */
 
-// Include definitions
-#include "definitions.h"                            // Includes definitions of control table variables addresses/data lengths/ communication/ protocols
-#include "motorIDs.h"                               // Includes motor IDs as set using Dynamixel Wizard
-#include "contolTableItems_LimitValues.h"           // Limit values for control table controlTableItems_LimitValues
-#include "StepperMotorSettings.h"                   // Includes Stepper Motor/Driver pin StepperMotorSettings
+// Include Motor Configuration files
+#include <definitions.h>                            // Includes definitions of control table variables addresses/data lengths/ communication/ protocols
+#include <motorIDs.h>                               // Includes motor IDs as set using Dynamixel Wizard
+//#include <contolTableItems_LimitValues.h>           // Limit values for control table controlTableItems_LimitValues
+//#include <StepperMotorSettings.h>                   // Includes Stepper Motor/Driver pin StepperMotorSettings
 
 //  Used Libraries
 #include "Arduino.h"                                // Main Arduino library
@@ -35,6 +35,7 @@ using namespace std;
 // Libraries for Robot Motors Driving
 #include "DynamixelProPlusMetamorphicManipulator.h"
 #include "CustomStepperMetamorphicManipulator.h"
+//#include "PseudoSPIcommMetamorphicManipulator.h"
 
 // Declare extern variables defined in DynamixelProPlusMetamorphicManipulator
 uint8_t dxl_ledBLUE_value[]  = {0, 255};
@@ -66,6 +67,7 @@ void setup() {
 
     // Initialize GroupSyncRead instances
     dynamixel::GroupSyncRead groupSyncRead_PP_MV(portHandler, packetHandler, ADDR_PRO_INDIRECTDATA_FOR_READ_PP_MV, LEN_PRO_INDIRECTDATA_FOR_READ_PP_MV);
+    dynamixel::GroupSyncRead groupSyncRead_PP_PV_PA_VL_AL(portHandler, packetHandler, ADDR_PRO_INDIRECTDATA_FOR_READ_PP_PV_PA_VL_AL, LEN_PRO_INDIRECTDATA_FOR_READ_PP_PV_PA_VL_AL);
 
     // Create object for handling dynamixels
     DynamixelProPlusMetamorphicManipulator dxl;
@@ -109,7 +111,7 @@ void setup() {
       Serial.println("FAILED");
     }
 
-
+    // I.a.4 Read current position/velocity/acceleration settings of manipulator
 
 }
 
