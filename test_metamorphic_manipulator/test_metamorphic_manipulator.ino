@@ -3,6 +3,11 @@
  *   Executes tests for Metamorphic Manipulator with 1 Nema34 Stepper + 3 Dynamixels
  *   using custom-made functions for Driving Steppers and Dynamixels of a serial metamorphic
  *   manipulator. 
+ * 
+ *   Tue 19.5.20 "Fixed definitions/declarations mismatches"
+ *      - This file is hard-linked locally to the folder ~/Arduino/MetaLunokhod101_Development/test_metamorphic_manipulator
+ *      - Configuration file is placed locally in ~/Arduino/libraries/test_metamorphic_manipulator_configuration folder
+ *      - Git repo is updated from the MetaLunokhod101_Development folder
  *   ********************************************************************************************* 
  */
 
