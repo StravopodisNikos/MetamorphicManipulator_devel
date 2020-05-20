@@ -21,8 +21,8 @@
 // Include Motor Configuration files
 #include <definitions.h>                            // Includes definitions of control table variables addresses/data lengths/ communication/ protocols
 #include <motorIDs.h>                               // Includes motor IDs as set using Dynamixel Wizard
-//#include <contolTableItems_LimitValues.h>           // Limit values for control table controlTableItems_LimitValues
-//#include <StepperMotorSettings.h>                   // Includes Stepper Motor/Driver pin StepperMotorSettings
+#include <contolTableItems_LimitValues.h>           // Limit values for control table controlTableItems_LimitValues
+#include <StepperMotorSettings.h>                   // Includes Stepper Motor/Driver pin StepperMotorSettings
 
 //  Used Libraries
 #include "Arduino.h"                                // Main Arduino library
@@ -54,6 +54,12 @@ vector<double> StpTrapzProfParams;
 vector<unsigned long> PROFILE_STEPS;
 vector<double> vector_for_trajectoryVelocity; 
 
+byte currentDirStatus;
+double currentAbsPos_double;
+double VelocityLimitStp;
+double AccelerationLimitStp;
+
+// Configure IDs for Dynamixels -> MUST align with the IDs configured at EEPROM of each module!
 uint8_t dxl_id[] = {DXL1_ID, DXL2_ID, DXL3_ID};
 
 void setup() {
@@ -76,6 +82,7 @@ void setup() {
 
     // Create object for handling dynamixels
     DynamixelProPlusMetamorphicManipulator dxl;
+    CustomStepperMetamorphicManipulator stp(STP1_ID, stepPin, dirPin, enblPin, ledPin, hallSwitchPin1, hallSwitchPin2, hallSwitchPin3, lockPin, spr, GEAR_FACTOR, ft);
 
         /*  
      * I. Begin Communication Testing
@@ -116,8 +123,13 @@ void setup() {
       Serial.println("FAILED");
     }
 
-    // I.a.4 Read current position/velocity/acceleration settings of manipulator
+    // I.a.4 Read current anatomy
+    Serial.println("Extracting Present Anatomy");
 
+    // I.a.5 Read current position/velocity/acceleration settings of manipulator
+    Serial.println("Extracting Present Configuration and Motion Profile parameters for Active Motors");
+    stp.read_STP_EEPROM_settings(&currentDirStatus, &currentAbsPos_double, &VelocityLimitStp , &AccelerationLimitStp);
+    
 }
 
 void loop() {
