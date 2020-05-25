@@ -40,14 +40,31 @@ using namespace std;
 // Libraries for Robot Motors Driving
 #include "DynamixelProPlusMetamorphicManipulator.h"
 #include "CustomStepperMetamorphicManipulator.h"
-//#include "PseudoSPIcommMetamorphicManipulator.h"
+#include "PseudoSPIcommMetamorphicManipulator.h"
 
 /*
- * Configure IDs for Dynamixels -> MUST align with the IDs configured at EEPROM of each module!
+ * Configure IDs for Dynamixels & NEMA34 Stepper Motor -> MUST align with the IDs configured at EEPROM of each module!
  */
 uint8_t dxl_id[] = {DXL1_ID, DXL2_ID, DXL3_ID};
 int id_count;
 int dxl_motors_used = 3;
+
+int Nema34_id = 1;
+/*
+ * For SPI communication Protocol
+ */
+int masterID          = 0;
+const int TOTAL_PSEUDOS_CONNECTED = 1;
+int pseudoIDs[]       = {PSEUDO1_ID};
+int ssPins[]          = {SSpinPseudo1};
+byte anatomy_counter  = 0;                        // just to check repeat mode
+
+byte CURRENT_STATE[sizeof(pseudoIDs)];            // empty states initialization array
+bool META_MODES[sizeof(pseudoIDs)];               // empty pseudo mode initialization array
+bool META_EXECS[sizeof(pseudoIDs)];               // empty pseudo mode-exec initialization array
+
+byte state_receive_from_slave;
+
 
 // Declare extern variables defined in DynamixelProPlusMetamorphicManipulator
 uint8_t dxl_ledBLUE_value[]  = {0, 255};
@@ -57,8 +74,17 @@ uint8_t dxl_ledRED_value[]   = {0, 255};
 uint32_t   dxl_present_position[sizeof(dxl_id)];
 int32_t    dxl_prof_vel[sizeof(dxl_id)];
 int32_t  dxl_prof_accel[sizeof(dxl_id)];
-int32_t   dxl_vel_limit[sizeof(dxl_id)];
-int32_t dxl_accel_limit[sizeof(dxl_id)];
+//int32_t   dxl_vel_limit[sizeof(dxl_id)];
+//int32_t dxl_accel_limit[sizeof(dxl_id)];
+
+/*
+ * Configure Stepper/Dynamixel settings
+ */
+float desiredConfiguration[nDoF];
+int desiredAnatomy[nPseudoJoints];
+
+dxlVelLimit dxl_vel_limit = {2000, 1500, 2000};
+dxlAccelLimit dxl_accel_limit = {900, 900, 900};
 
 // Declare extern variables defined in CustomStepperMetamorphicManipulator
 bool return_function_state = false;
@@ -85,7 +111,7 @@ const char * YES = "Y";
 const char * NO = "N";
 
 int nl_char_shifting   = 10;
-
+bool MENU_EXIT;
 
 
 void setup() {
@@ -101,6 +127,7 @@ void setup() {
 
     // Initialize GroupSyncWrite instances
     dynamixel::GroupSyncWrite groupSyncWrite_TORQUE_ENABLE(portHandler, packetHandler, ADDR_PRO_TORQUE_ENABLE, LEN_PRO_TORQUE_ENABLE);
+    dynamixel::GroupSyncWrite groupSyncWriteGoalPos(portHandler, packetHandler, ADDR_PRO_GOAL_POSITION, LEN_PRO_GOAL_POSITION);
     dynamixel::GroupSyncWrite groupSyncWrite_GP_A_V_LED(portHandler, packetHandler, ADDR_PRO_INDIRECTDATA_FOR_WRITE_GP_A_V_LED, LEN_PRO_INDIRECTDATA_FOR_WRITE_GP_A_V_LED);
 
     // Initialize GroupSyncRead instances
@@ -110,10 +137,12 @@ void setup() {
     // Create object for handling dynamixels
     DynamixelProPlusMetamorphicManipulator dxl;
     CustomStepperMetamorphicManipulator stp(STP1_ID, STEP_Pin, DIR_Pin, ENABLE_Pin, LED_Pin, HALL_SWITCH_PIN1, HALL_SWITCH_PIN2, HALL_SWITCH_PIN3, LOCK_Pin, SPR1, GEAR_FACTOR_PLANETARY, FT_CLOSED_LOOP);
+    PseudoSPIcommMetamorphicManipulator MASTER_SPI(Tx, masterID, statusLED_Pin, MOSI_NANO, MISO_NANO, SCK_NANO, TXled_Pin, RXled_Pin, ssPins);
 
     /*  
      * I. Begin Communication Testing
      */
+
     // I.a.1. Open port
     Serial.println("Opening port");
     if (portHandler->openPort())
@@ -214,21 +243,122 @@ void setup() {
     }
 
     /* 
-     * III.a  Asks for user input to give desired commands for: 
+     * III.a  USER INPUT MENU: Asks for user input to give desired commands for: 
     *  1. set home position
     *  2. set configuration
     *  3. set new anatomy
     *  4. set new joint actuator limits
     *  
     * EXECUTED IN A LOOP UNTIL USER SETS EXIT COMMAND
-    * 
     */
 
+  // START USER INPUT MENU 
+  do{
+
     // III.a.1 HOMING
+    Serial.println("HOME MOTORS? [Y/N] :");
 
-    // III.a.2 NEW CONFIGURATION
+    while (Serial.available() == 0) {};
 
-    // III.a.3 
+    user_input_string = Serial.readString();
+
+    Serial.print("[ USER INPUT ]"); Serial.print("   ->   "); Serial.print(user_input_string);
+    if( ( strcmp(user_input_string.c_str(),YES)-nl_char_shifting == 0 ) )
+    {
+        Serial.println("STARTED HOMING ACTIVE JOINT MOTORS");
+
+        // HOMING STEPPER
+        stp.setStepperHomePositionSlow();
+        // HOMING DYNAMIXELS
+        dxlGoalPos dxl_goal_pos = {0,0,0};
+        return_function_state = dxl.syncSetGoalPosition(dxl_id, sizeof(dxl_id), dxl_goal_pos, sizeof(dxl_goal_pos), groupSyncWriteGoalPos,  packetHandler, portHandler);
+        
+        Serial.println("FINISHED HOMING ACTIVE JOINT MOTORS");
+    }
+    else
+    {
+      Serial.println("[WARNING] ACTIVE JOINT MOTORS NOT IN HOME POSITION");
+    } 
+
+    // III.a.2 NEW ANATOMY
+    Serial.println("SET NEW ANATOMY? [Y/N] :");
+
+    while (Serial.available() == 0) {};
+
+    user_input_string = Serial.readString();
+
+    Serial.print("[ USER INPUT ]"); Serial.print("   ->   "); Serial.print(user_input_string);
+    if( ( strcmp(user_input_string.c_str(),YES)-nl_char_shifting == 0 ) )
+    {
+        Serial.println("SETTING NEW ANATOMY");
+
+        // III.a.2.1 Construct desiredAnatomy
+        for (size_t id_count = 0; id_count < nPseudoJoints; id_count++)
+        {
+          Serial.print("Give desired Ci for Pseudojoint["); Serial.print(id_count+1); Serial.println("] :");
+          while (Serial.available() == 0) {};
+          desiredAnatomy[id_count] = Serial.parseInt();
+        }
+
+        // III.a.2.2 Execute routine for metamorphosis(first executed in using_ISR_simple_complete_master.ino -> now: metamorphosis_execution.ino)
+
+    }
+    else
+    {
+      Serial.println("[INFO] ANATOMY UNCHNAGED");
+    }
+    // IV.a.3 NEW ACTUATOR LIMITS
+
+    // III.a.4 NEW CONFIGURATION
+    Serial.println("SET NEW CONFIGURATION? [Y/N] :");
+
+    while (Serial.available() == 0) {};
+
+    user_input_string = Serial.readString();
+
+    Serial.print("[ USER INPUT ]"); Serial.print("   ->   "); Serial.print(user_input_string);
+    if( ( strcmp(user_input_string.c_str(),YES)-nl_char_shifting == 0 ) )
+    {
+        Serial.println("SETTING NEW CONFIGURATION ON ACTIVE JOINT MOTORS");
+
+        for (size_t id_count = 0; id_count < nDoF; id_count++)
+        {
+          Serial.print("Give desired absolute angle for active joint ["); Serial.print(id_count+1); Serial.println("] :");
+          while (Serial.available() == 0) {};
+          desiredConfiguration[id_count] = Serial.parseFloat();
+        }
+        
+        // HERE SYNC MUST BE EXECUTED
+        
+
+      Serial.println("[INFO] NEW CONFIGURATION SET");
+    }
+    else
+    {
+      Serial.println("[INFO] CONFIGURATION UNCHNAGED");
+    } 
+
+    // END MENU LOOP?
+    Serial.println("EXIT USER INPUT MENU? [Y/N] :");
+
+    while (Serial.available() == 0) {};
+
+    user_input_string = Serial.readString();
+
+    Serial.print("[ USER INPUT ]"); Serial.print("   ->   "); Serial.print(user_input_string);
+    if( ( strcmp(user_input_string.c_str(),YES)-nl_char_shifting == 0 ) )
+    {
+        MENU_EXIT = true;
+    }
+    else
+    {
+      MENU_EXIT = false;
+    } 
+
+  } while(!MENU_EXIT); // END USER INPUT MENU
+
+  // PRINT MSG
+
 
 } // END SETUP
 
