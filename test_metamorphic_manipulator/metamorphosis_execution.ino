@@ -1,6 +1,5 @@
 void metamorphosis_execution(PseudoSPIcommMetamorphicManipulator MASTER_SPI, bool END_METAMORPHOSIS, bool metaExecution, byte * desiredAnatomy, int * pseudoIDs, int *ssPins, byte * CURRENT_STATE, const int TOTAL_PSEUDOS_CONNECTED)
 {
-//bool return_function_state;
 
 while( (!END_METAMORPHOSIS) ) {
 

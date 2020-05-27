@@ -72,14 +72,25 @@ bool END_METAMORPHOSIS;
 bool END_ACTION = false;
 
 // Declare extern variables defined in DynamixelProPlusMetamorphicManipulator
-uint8_t dxl_ledBLUE_value[]  = {0, 255};
-uint8_t dxl_ledGREEN_value[] = {0, 255};
-uint8_t dxl_ledRED_value[]   = {0, 255};
-uint32_t   dxl_present_position[sizeof(dxl_id)];
-int32_t    dxl_prof_vel[sizeof(dxl_id)];
-int32_t  dxl_prof_accel[sizeof(dxl_id)];
+uint8_t   dxl_ledBLUE_value[]  = {0, 255};
+uint8_t   dxl_ledGREEN_value[] = {0, 255};
+uint8_t   dxl_ledRED_value[]   = {0, 255};
+uint32_t  dxl_present_position[sizeof(dxl_id)];
+int32_t   dxl_prof_vel[sizeof(dxl_id)];
+int32_t   dxl_prof_accel[sizeof(dxl_id)];
+
+uint8_t   dxl_moving[sizeof(dxl_id)];
+uint32_t  dxl_present_position[sizeof(dxl_id)];
+
 //int32_t   dxl_vel_limit[sizeof(dxl_id)];
 //int32_t dxl_accel_limit[sizeof(dxl_id)];
+
+int32_t DxlInitPos;                           // Variables used to initialilize DxlTrapzProfParams_forP2P[]
+int32_t DxlGoalPosition;
+int32_t DxlVmax;
+int32_t DxlAmax;
+const int TrapzProfParams_size = 4;           // Also applied to StpTrapzProfParams
+typeDxlTrapzProfParams_forP2P DxlTrapzProfParams_forP2P[TrapzProfParams_size];
 
 /*
  * Configure Stepper/Dynamixel settings
@@ -99,6 +110,13 @@ byte currentDirStatus;
 double currentAbsPos_double;
 double VelocityLimitStp;
 double AccelerationLimitStp;
+double MaxPosLimitStp;
+
+double StpInitPos;                          // Variables used to initialilize StpTrapzProfParams[]
+double StpGoalPosition;
+double StpVmax;
+double StpAmax;
+double StpTrapzProfParams[4];
 
 /*
  * USER SERIAL INPUT VARIABLES
@@ -235,6 +253,8 @@ void setup() {
         {
             Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [  READ CURRENT Ci  ]  FAILED");
         }
+
+        // Here Anatomy MUST BE PRINTED IN SERIAL MONITOR!
     }
 
     // II.b.1 Setup current position/velocity/acceleration settings of stepper Joint1 
@@ -247,18 +267,19 @@ void setup() {
       
     if( ( strcmp(user_input_string.c_str(),YES)-nl_char_shifting == 0 ) )
     {
-      // USER PREDEFINED VALUES
+      // DEFAULT VALUES
       currentDirStatus = HIGH;     // [byte]
       currentAbsPos_double = 0.0;    // [rad]
       VelocityLimitStp = 5.0;        // [rad/sec]
       AccelerationLimitStp = 5.0;    // [rad/sec^2]
+      MaxPosLimitStp = PI/2;         // [rad]
 
-      stp.save_STP_EEPROM_settings(&currentDirStatus, &currentAbsPos_double, &VelocityLimitStp , &AccelerationLimitStp);
+      stp.save_STP_EEPROM_settings(&currentDirStatus, &currentAbsPos_double, &VelocityLimitStp , &AccelerationLimitStp, &MaxPosLimitStp);
     }
 
     // II.b.2 Read current position/velocity/acceleration settings of stepper Joint1
     Serial.println("[   MASTER:  ]  Extracting Present Configuration and Motion Profile parameters for Stepper NEMA34");
-    stp.read_STP_EEPROM_settings(&currentDirStatus, &currentAbsPos_double, &VelocityLimitStp , &AccelerationLimitStp);
+    stp.read_STP_EEPROM_settings(&currentDirStatus, &currentAbsPos_double, &VelocityLimitStp , &AccelerationLimitStp, &MaxPosLimitStp);
     // Print the results in serial monitor
           Serial.print("[   JOINT1 STEPPER :"); Serial.print(STP1_ID); Serial.println(" ]   [READ EEPROM SETTINGS]:   SUCCESS  [UNITS]:  RAD, SEC"); 
           Serial.println("-----------------------------------------------------------------------------------------------");
@@ -297,9 +318,9 @@ void setup() {
     /* 
      * III.a  USER INPUT MENU: Asks for user input to give desired commands for: 
     *  1. set home position
-    *  2. set configuration
-    *  3. set new anatomy
-    *  4. set new joint actuator limits
+    *  2. set anatomy 
+    *  3. set new joint actuator limits
+    *  4. set configuration
     *  
     * EXECUTED IN A LOOP UNTIL USER SETS EXIT COMMAND
     */
@@ -362,7 +383,7 @@ void setup() {
       Serial.println("[   MASTER:  ]  [INFO] ANATOMY UNCHNAGED");
     }
 
-    // IV.a.3 NEW ACTUATOR LIMITS
+    // III.a.3 NEW ACTUATOR LIMITS
 
     // III.a.4 NEW CONFIGURATION
     Serial.println("[   MASTER:  ]  SET NEW CONFIGURATION? [Y/N] :");
@@ -384,7 +405,38 @@ void setup() {
         }
         
         // HERE SYNC MUST BE EXECUTED
-        
+        // [0] -> current abs position is extracted: currentAbsPos_double is the global double variable that saves current abs angle(always initialized at setup from EEPROM)
+        // [1] -> goal abs position is given by the array filled by user
+        // [2] -> max vel limit is assigned
+        // [3] -> max accel limit is assigned
+        // Stepper Nema34
+        StpInitPos          = currentAbsPos_double;                         
+        StpGoalPosition     = (double) desiredConfiguration[0];
+        StpVmax             = VelocityLimitStp;
+        StpAmax             = AccelerationLimitStp;
+        StpTrapzProfParams  = {StpInitPos, StpGoalPosition, StpVmax, StpAmax};
+        // Dynamixels
+        return_function_state = dxl.syncGet_PP_MV( dxl_id, sizeof(dxl_id), dxl_moving, sizeof(dxl_moving), dxl_present_position, sizeof(dxl_present_position) , groupSyncRead_PP_MV, groupSyncWrite_TORQUE_ENABLE, packetHandler, portHandler);
+        // convert double to pulses
+        dxl_goal_position[0] = dxl.convertRadian2DxlPulses((double) desiredConfiguration[1]);
+        dxl_goal_position[1] = dxl.convertRadian2DxlPulses((double) desiredConfiguration[2]);
+        dxl_goal_position[2] = dxl.convertRadian2DxlPulses((double) desiredConfiguration[3]);
+
+        DxlTrapzProfParams_forP2P[0][1] = dxl_present_position[0];      // Dxl1
+        DxlTrapzProfParams_forP2P[0][2] = dxl_goal_position[0];
+        DxlTrapzProfParams_forP2P[0][3] = dxl_vel_limit[0];
+        DxlTrapzProfParams_forP2P[0][4] = dxl_accel_limit[0];
+        DxlTrapzProfParams_forP2P[1][1] = dxl_present_position[1];      // Dxl2
+        DxlTrapzProfParams_forP2P[1][2] = dxl_goal_position[1];
+        DxlTrapzProfParams_forP2P[1][3] = dxl_vel_limit[1];
+        DxlTrapzProfParams_forP2P[1][4] = dxl_accel_limit[1];
+        DxlTrapzProfParams_forP2P[2][1] = dxl_present_position[2];      // Dxl3
+        DxlTrapzProfParams_forP2P[2][2] = dxl_goal_position[2];
+        DxlTrapzProfParams_forP2P[2][3] = dxl_vel_limit[2];
+        DxlTrapzProfParams_forP2P[2][4] = dxl_accel_limit[2];
+
+        Serial.println("[   MASTER:  ]  [INFO] Started Sync P2P Dynamixels-Stepper...");
+        syncP2Ptrapz_execution(DxlTrapzProfParams_forP2P, StpTrapzProfParams, TrapzProfParams_size, packetHandler, portHandler);
 
       Serial.println("[   MASTER:  ]  [INFO] NEW CONFIGURATION SET");
     }
