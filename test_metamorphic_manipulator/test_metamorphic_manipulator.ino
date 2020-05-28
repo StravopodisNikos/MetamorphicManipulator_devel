@@ -78,9 +78,7 @@ uint8_t   dxl_ledRED_value[]   = {0, 255};
 uint32_t  dxl_present_position[sizeof(dxl_id)];
 int32_t   dxl_prof_vel[sizeof(dxl_id)];
 int32_t   dxl_prof_accel[sizeof(dxl_id)];
-
 uint8_t   dxl_moving[sizeof(dxl_id)];
-uint32_t  dxl_present_position[sizeof(dxl_id)];
 
 //int32_t   dxl_vel_limit[sizeof(dxl_id)];
 //int32_t dxl_accel_limit[sizeof(dxl_id)];
@@ -102,8 +100,8 @@ dxlAccelLimit dxl_accel_limit = {900, 900, 900};
 
 // Declare extern variables defined in CustomStepperMetamorphicManipulator
 bool return_function_state = false;
+bool segmentExistsTrapz;
 vector<double> TrajAssignedDuration;
-vector<double> StpTrapzProfParams;
 vector<unsigned long> PROFILE_STEPS;
 vector<double> vector_for_trajectoryVelocity; 
 byte currentDirStatus;
@@ -116,7 +114,16 @@ double StpInitPos;                          // Variables used to initialilize St
 double StpGoalPosition;
 double StpVmax;
 double StpAmax;
-double StpTrapzProfParams[4];
+
+const int StpTrapzProfParams_size = 4;                  // This array stores the same data as DxlTrapzProfParams_forP2P for Dxls
+double StpTrapzProfParams[StpTrapzProfParams_size];
+
+const int storage_array_for_TrajAssignedDuration_size = 5;  // This array stores properties for stepper trajectory equations for Melchiorri Theory Book
+double storage_array_for_TrajAssignedDuration[storage_array_for_TrajAssignedDuration_size];
+
+const int storage_array_for_PROFILE_STEPS_size = 4;     // This array is for Stepper Progile Trajectory Execution
+unsigned long storage_array_for_PROFILE_STEPS[storage_array_for_PROFILE_STEPS_size];
+
 
 /*
  * USER SERIAL INPUT VARIABLES
@@ -136,6 +143,10 @@ boolean newData = false;
 int dataNumber = 0;             // new for this version
 bool MENU_EXIT;
 
+// Create object for handling motors
+DynamixelProPlusMetamorphicManipulator dxl;
+CustomStepperMetamorphicManipulator stp(STP1_ID, STEP_Pin, DIR_Pin, ENABLE_Pin, LED_Pin, HALL_SWITCH_PIN1, HALL_SWITCH_PIN2, HALL_SWITCH_PIN3, LOCK_Pin, SPR1, GEAR_FACTOR_PLANETARY, FT_CLOSED_LOOP);
+PseudoSPIcommMetamorphicManipulator MASTER_SPI(Tx, masterID, statusLED_Pin, MOSI_NANO, MISO_NANO, SCK_NANO, TXled_Pin, RXled_Pin, ssPins);
 
 void setup() {
     Serial.begin(BAUDRATE);
@@ -156,11 +167,6 @@ void setup() {
     // Initialize GroupSyncRead instances
     dynamixel::GroupSyncRead groupSyncRead_PP_MV(portHandler, packetHandler, ADDR_PRO_INDIRECTDATA_FOR_READ_PP_MV, LEN_PRO_INDIRECTDATA_FOR_READ_PP_MV);
     dynamixel::GroupSyncRead groupSyncRead_PP_PV_PA_VL_AL(portHandler, packetHandler, ADDR_PRO_INDIRECTDATA_FOR_READ_PP_PV_PA_VL_AL, LEN_PRO_INDIRECTDATA_FOR_READ_PP_PV_PA_VL_AL);
-
-    // Create object for handling motors
-    DynamixelProPlusMetamorphicManipulator dxl;
-    CustomStepperMetamorphicManipulator stp(STP1_ID, STEP_Pin, DIR_Pin, ENABLE_Pin, LED_Pin, HALL_SWITCH_PIN1, HALL_SWITCH_PIN2, HALL_SWITCH_PIN3, LOCK_Pin, SPR1, GEAR_FACTOR_PLANETARY, FT_CLOSED_LOOP);
-    PseudoSPIcommMetamorphicManipulator MASTER_SPI(Tx, masterID, statusLED_Pin, MOSI_NANO, MISO_NANO, SCK_NANO, TXled_Pin, RXled_Pin, ssPins);
 
     /*  
      * I. Begin Communication Testing
@@ -414,7 +420,11 @@ void setup() {
         StpGoalPosition     = (double) desiredConfiguration[0];
         StpVmax             = VelocityLimitStp;
         StpAmax             = AccelerationLimitStp;
-        StpTrapzProfParams  = {StpInitPos, StpGoalPosition, StpVmax, StpAmax};
+        StpTrapzProfParams[0]  =  StpInitPos;
+        StpTrapzProfParams[1]  =  StpGoalPosition;
+        StpTrapzProfParams[2]  =  StpVmax;
+        StpTrapzProfParams[3]  =  StpAmax;
+
         // Dynamixels
         return_function_state = dxl.syncGet_PP_MV( dxl_id, sizeof(dxl_id), dxl_moving, sizeof(dxl_moving), dxl_present_position, sizeof(dxl_present_position) , groupSyncRead_PP_MV, groupSyncWrite_TORQUE_ENABLE, packetHandler, portHandler);
         // convert double to pulses
@@ -422,21 +432,21 @@ void setup() {
         dxl_goal_position[1] = dxl.convertRadian2DxlPulses((double) desiredConfiguration[2]);
         dxl_goal_position[2] = dxl.convertRadian2DxlPulses((double) desiredConfiguration[3]);
 
-        DxlTrapzProfParams_forP2P[0][1] = dxl_present_position[0];      // Dxl1
-        DxlTrapzProfParams_forP2P[0][2] = dxl_goal_position[0];
-        DxlTrapzProfParams_forP2P[0][3] = dxl_vel_limit[0];
-        DxlTrapzProfParams_forP2P[0][4] = dxl_accel_limit[0];
-        DxlTrapzProfParams_forP2P[1][1] = dxl_present_position[1];      // Dxl2
-        DxlTrapzProfParams_forP2P[1][2] = dxl_goal_position[1];
-        DxlTrapzProfParams_forP2P[1][3] = dxl_vel_limit[1];
-        DxlTrapzProfParams_forP2P[1][4] = dxl_accel_limit[1];
-        DxlTrapzProfParams_forP2P[2][1] = dxl_present_position[2];      // Dxl3
-        DxlTrapzProfParams_forP2P[2][2] = dxl_goal_position[2];
-        DxlTrapzProfParams_forP2P[2][3] = dxl_vel_limit[2];
-        DxlTrapzProfParams_forP2P[2][4] = dxl_accel_limit[2];
+        DxlTrapzProfParams_forP2P[0][0] = dxl_present_position[0];      // Dxl1
+        DxlTrapzProfParams_forP2P[0][1] = dxl_goal_position[0];
+        DxlTrapzProfParams_forP2P[0][2] = dxl_vel_limit[0];
+        DxlTrapzProfParams_forP2P[0][3] = dxl_accel_limit[0];
+        DxlTrapzProfParams_forP2P[1][0] = dxl_present_position[1];      // Dxl2
+        DxlTrapzProfParams_forP2P[1][1] = dxl_goal_position[1];
+        DxlTrapzProfParams_forP2P[1][2] = dxl_vel_limit[1];
+        DxlTrapzProfParams_forP2P[1][3] = dxl_accel_limit[1];
+        DxlTrapzProfParams_forP2P[2][0] = dxl_present_position[2];      // Dxl3
+        DxlTrapzProfParams_forP2P[2][1] = dxl_goal_position[2];
+        DxlTrapzProfParams_forP2P[2][2] = dxl_vel_limit[2];
+        DxlTrapzProfParams_forP2P[2][3] = dxl_accel_limit[2];
 
-        Serial.println("[   MASTER:  ]  [INFO] Started Sync P2P Dynamixels-Stepper...");
-        syncP2Ptrapz_execution(DxlTrapzProfParams_forP2P, StpTrapzProfParams, TrapzProfParams_size, packetHandler, portHandler);
+        Serial.println("[   MASTER:  ]  [INFO] SETTING NEW CONFIGURATION");
+        syncP2Ptrapz_execution(DxlTrapzProfParams_forP2P, StpTrapzProfParams, TrapzProfParams_size);
 
       Serial.println("[   MASTER:  ]  [INFO] NEW CONFIGURATION SET");
     }
