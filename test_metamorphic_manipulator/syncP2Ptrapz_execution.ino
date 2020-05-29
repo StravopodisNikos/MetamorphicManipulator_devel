@@ -1,4 +1,4 @@
-void syncP2Ptrapz_execution(typeDxlTrapzProfParams_forP2P DxlTrapzProfParams_forP2P[] , double * StpTrapzProfParams, int TrapzProfParams_size)
+void syncP2Ptrapz_execution(typeDxlTrapzProfParams_forP2P DxlTrapzProfParams_forP2P[] , double * StpTrapzProfParams, int TrapzProfParams_size, dynamixel::GroupSyncWrite groupSyncWrite_GP_A_V_LED, dynamixel::GroupSyncWrite groupSyncWrite_TORQUE_ENABLE, dynamixel::GroupSyncRead groupSyncRead_PP_MV, dynamixel::PortHandler *portHandler, dynamixel::PacketHandler *packetHandler)
 {
     /*
      *  Emulates SimpleSyncP2P_TrapzVelProf_SDK
@@ -15,6 +15,7 @@ void syncP2Ptrapz_execution(typeDxlTrapzProfParams_forP2P DxlTrapzProfParams_for
      */
     unsigned long DxlTimeExec = dxl.calculateDxlExecTime(DxlTrapzProfParams_forP2P[0][3], DxlTrapzProfParams_forP2P[0][4], DxlTrapzProfParams_forP2P[0][1], DxlTrapzProfParams_forP2P[0][2]);
     double DxlTimeExec_sec = DxlTimeExec / 1000.0; 
+
     /* 
      * II.
      * Stepper Motor Properties for task execution
@@ -29,20 +30,20 @@ void syncP2Ptrapz_execution(typeDxlTrapzProfParams_forP2P DxlTrapzProfParams_for
     PROFILE_STEPS = stp.returnTrapzVelProfileSteps(storage_array_for_TrajAssignedDuration, storage_array_for_TrajAssignedDuration_size, storage_array_for_PROFILE_STEPS, storage_array_for_PROFILE_STEPS_size, segmentExistsTrapz);
     
     /*
-     * III. Execute Sync write for Dynamixels using Indirect Addressing 
+     * III.1 Execute Sync write for Dynamixels using Indirect Addressing 
      */
-
+    return_function_state = dxl.syncSet_GP_A_V_LED(dxl_id, sizeof(dxl_id), DxlTrapzProfParams_forP2P,sizeof(DxlTrapzProfParams_forP2P), groupSyncWrite_GP_A_V_LED, groupSyncWrite_TORQUE_ENABLE, packetHandler, portHandler );
 
     /*
-     * IV. Execute Stepper Motor Motion
+     * IΙΙ.2 Execute Stepper Motor Motion
      */
 
     double initial_step_delay_time = stp.calculateInitialStepDelay(storage_array_for_TrajAssignedDuration, storage_array_for_TrajAssignedDuration_size);
-
     return_function_state = stp.executeStepperTrapzProfile(storage_array_for_PROFILE_STEPS, storage_array_for_PROFILE_STEPS_size, segmentExistsTrapz, DxlTimeExec_sec, initial_step_delay_time);
 
     /* 
      * V. After movement finishes, reads current position (for Dynamixels) and save to global variable (for stepper only)
      */
+    return_function_state = dxl.syncGet_PP_MV( dxl_id, sizeof(dxl_id), dxl_moving, sizeof(dxl_moving), dxl_present_position, sizeof(dxl_present_position) , groupSyncRead_PP_MV, groupSyncWrite_TORQUE_ENABLE, packetHandler, portHandler);
 
 }

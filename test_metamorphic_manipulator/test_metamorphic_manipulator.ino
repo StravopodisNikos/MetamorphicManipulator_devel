@@ -76,6 +76,7 @@ uint8_t   dxl_ledBLUE_value[]  = {0, 255};
 uint8_t   dxl_ledGREEN_value[] = {0, 255};
 uint8_t   dxl_ledRED_value[]   = {0, 255};
 uint32_t  dxl_present_position[sizeof(dxl_id)];
+uint32_t  dxl_goal_position[sizeof(dxl_id)];
 int32_t   dxl_prof_vel[sizeof(dxl_id)];
 int32_t   dxl_prof_accel[sizeof(dxl_id)];
 uint8_t   dxl_moving[sizeof(dxl_id)];
@@ -147,26 +148,25 @@ bool MENU_EXIT;
 DynamixelProPlusMetamorphicManipulator dxl;
 CustomStepperMetamorphicManipulator stp(STP1_ID, STEP_Pin, DIR_Pin, ENABLE_Pin, LED_Pin, HALL_SWITCH_PIN1, HALL_SWITCH_PIN2, HALL_SWITCH_PIN3, LOCK_Pin, SPR1, GEAR_FACTOR_PLANETARY, FT_CLOSED_LOOP);
 PseudoSPIcommMetamorphicManipulator MASTER_SPI(Tx, masterID, statusLED_Pin, MOSI_NANO, MISO_NANO, SCK_NANO, TXled_Pin, RXled_Pin, ssPins);
+// Initialize PortHandler instance
+dynamixel::PortHandler *portHandler = dynamixel::PortHandler::getPortHandler(DEVICENAME);
+
+// Initialize PacketHandler instance
+dynamixel::PacketHandler *packetHandler = dynamixel::PacketHandler::getPacketHandler(PROTOCOL_VERSION);
+
+// Initialize GroupSyncWrite instances
+dynamixel::GroupSyncWrite groupSyncWrite_TORQUE_ENABLE(portHandler, packetHandler, ADDR_PRO_TORQUE_ENABLE, LEN_PRO_TORQUE_ENABLE);
+dynamixel::GroupSyncWrite groupSyncWriteGoalPos(portHandler, packetHandler, ADDR_PRO_GOAL_POSITION, LEN_PRO_GOAL_POSITION);
+dynamixel::GroupSyncWrite groupSyncWrite_GP_A_V_LED(portHandler, packetHandler, ADDR_PRO_INDIRECTDATA_FOR_WRITE_GP_A_V_LED, LEN_PRO_INDIRECTDATA_FOR_WRITE_GP_A_V_LED);
+
+// Initialize GroupSyncRead instances
+dynamixel::GroupSyncRead groupSyncRead_PP_MV(portHandler, packetHandler, ADDR_PRO_INDIRECTDATA_FOR_READ_PP_MV, LEN_PRO_INDIRECTDATA_FOR_READ_PP_MV);
+dynamixel::GroupSyncRead groupSyncRead_PP_PV_PA_VL_AL(portHandler, packetHandler, ADDR_PRO_INDIRECTDATA_FOR_READ_PP_PV_PA_VL_AL, LEN_PRO_INDIRECTDATA_FOR_READ_PP_PV_PA_VL_AL);
 
 void setup() {
     Serial.begin(BAUDRATE);
     while(!Serial);
     Serial.println("[   MASTER:  ]  Start..");
-
-    // Initialize PortHandler instance
-    dynamixel::PortHandler *portHandler = dynamixel::PortHandler::getPortHandler(DEVICENAME);
-
-    // Initialize PacketHandler instance
-    dynamixel::PacketHandler *packetHandler = dynamixel::PacketHandler::getPacketHandler(PROTOCOL_VERSION);
-
-    // Initialize GroupSyncWrite instances
-    dynamixel::GroupSyncWrite groupSyncWrite_TORQUE_ENABLE(portHandler, packetHandler, ADDR_PRO_TORQUE_ENABLE, LEN_PRO_TORQUE_ENABLE);
-    dynamixel::GroupSyncWrite groupSyncWriteGoalPos(portHandler, packetHandler, ADDR_PRO_GOAL_POSITION, LEN_PRO_GOAL_POSITION);
-    dynamixel::GroupSyncWrite groupSyncWrite_GP_A_V_LED(portHandler, packetHandler, ADDR_PRO_INDIRECTDATA_FOR_WRITE_GP_A_V_LED, LEN_PRO_INDIRECTDATA_FOR_WRITE_GP_A_V_LED);
-
-    // Initialize GroupSyncRead instances
-    dynamixel::GroupSyncRead groupSyncRead_PP_MV(portHandler, packetHandler, ADDR_PRO_INDIRECTDATA_FOR_READ_PP_MV, LEN_PRO_INDIRECTDATA_FOR_READ_PP_MV);
-    dynamixel::GroupSyncRead groupSyncRead_PP_PV_PA_VL_AL(portHandler, packetHandler, ADDR_PRO_INDIRECTDATA_FOR_READ_PP_PV_PA_VL_AL, LEN_PRO_INDIRECTDATA_FOR_READ_PP_PV_PA_VL_AL);
 
     /*  
      * I. Begin Communication Testing
@@ -446,9 +446,10 @@ void setup() {
         DxlTrapzProfParams_forP2P[2][3] = dxl_accel_limit[2];
 
         Serial.println("[   MASTER:  ]  [INFO] SETTING NEW CONFIGURATION");
-        syncP2Ptrapz_execution(DxlTrapzProfParams_forP2P, StpTrapzProfParams, TrapzProfParams_size);
+        
+        syncP2Ptrapz_execution(DxlTrapzProfParams_forP2P, StpTrapzProfParams, TrapzProfParams_size, groupSyncWrite_GP_A_V_LED, groupSyncWrite_TORQUE_ENABLE, groupSyncRead_PP_MV, portHandler, packetHandler);
 
-      Serial.println("[   MASTER:  ]  [INFO] NEW CONFIGURATION SET");
+        Serial.println("[   MASTER:  ]  [INFO] NEW CONFIGURATION SET");
     }
     else
     {
@@ -475,7 +476,6 @@ void setup() {
   } while(!MENU_EXIT); // END USER INPUT MENU
 
   // PRINT MSG
-
 
 } // END SETUP
 
