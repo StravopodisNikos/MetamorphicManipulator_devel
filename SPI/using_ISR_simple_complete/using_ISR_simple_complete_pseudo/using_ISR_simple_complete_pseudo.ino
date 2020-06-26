@@ -26,6 +26,7 @@ volatile bool MOVE_MOTOR;
 volatile bool LOCK_MOTOR;
 volatile bool UNLOCK_MOTOR;
 volatile bool GIVE_CS;
+volatile bool GIVE_CP;
 volatile bool CONNECT2MASTER;
 volatile bool SET_GOAL_POS;
 volatile bool SAVE_GLOBALS_TO_EEPROM;
@@ -36,20 +37,25 @@ volatile bool motor_finished        = false;
 volatile bool motor_locked          = false;
 volatile bool motor_unlocked        = false;
 volatile bool current_state_sent    = false;
+volatile bool current_position_sent = false;
 volatile bool connected2master      = false;
 volatile bool goal_position_set     = false;
 volatile bool globals_saved_to_eeprom     = false;
 volatile bool leds_indicated_meta_repeats = false;
 
+volatile bool homingHallActivated   = false;
+volatile bool limitHallActivated    = false;
+
 // bytes accessed by loop + ISR
-volatile byte motor_new_state;       
+volatile byte motor_new_state;
+volatile byte motor_current_ci;       
 volatile byte goal_ci;
 volatile byte slaveID;
 
 /*
  *   MOTOR MOVEMENT GLOBAL VARIABLES - ALWAYS INITIALIZED BY READING EEPROM AT setup()
  */
-byte  currentDirStatusPseudo;
+byte  currentDirStatusPseudo        = LOW;
 int  currentMoveRelPseudo           = 0;    // can be initialized to 0 and change after 1st execution
 int  currentAbsPosPseudo;
 byte currentAbsPosPseudo_ci;
@@ -78,38 +84,45 @@ void setup (void)
   pinMode(stepPin_NANO, OUTPUT);
   pinMode(dirPin_NANO, OUTPUT);
   pinMode(enabPin_NANO, OUTPUT);
-  pinMode(hallSwitch_Pin, INPUT);
   pinMode(RELAY_lock_Pin, OUTPUT);
+  pinMode(RELAY_lock_Pin2, OUTPUT);
+  
+  pinMode(hallSwitch_Pin, INPUT_PULLUP);
+  pinMode(pseudoLimitSwitch_Pin, INPUT_PULLUP);
   
   digitalWrite(stepPin_NANO, LOW);
   digitalWrite(enabPin_NANO, LOW);
-  digitalWrite(dirPin_NANO, LOW);  
+  digitalWrite(dirPin_NANO, LOW);
+
+  digitalWrite(RELAY_lock_Pin, HIGH);                   //  remains locked when when NO connected 
+  digitalWrite(RELAY_lock_Pin2, HIGH);                  //  remains locked when when NO connected
+
+// SLAVE EXTERNAL INTERRUPTS CONFIGURATION
+  attachInterrupt(digitalPinToInterrupt(pseudoLimitSwitch_Pin), changePseudoDirInterrupt, RISING);
+  attachInterrupt(digitalPinToInterrupt(hallSwitch_Pin), beginHomingCalibrationInterrupt, RISING);
   
-// SLAVE ISR CONFIGURATION
+  homingHallActivated = false;
+  limitHallActivated  = false;
+  
+// SLAVE INTERNAL ISR CONFIGURATION
   SPCR |= _BV(SPE);           // turn on SPI in slave mode
 
   SPCR |= _BV(SPIE);          // turn on interrupts
 
-  digitalWrite(TXled_Pin,LOW); digitalWrite(RXled_Pin,LOW);
+  //digitalWrite(TXled_Pin,LOW); digitalWrite(RXled_Pin,LOW);
 
-//SLAVE1_SPI.setupEEPROMslave( pseudoID, PI/2, -PI/2, 0.2617994);   // LAST EXECUTION Wed 18.3.2020
+// SETUP BEFORE ASSEMBLY
+  //SLAVE1_SPI.setupEEPROMslave( pseudoID, PI/2, -PI/2, 0.2617994);   // LAST EXECUTION Wed 18.3.2020
 
-// HOMING only for Debugging => No lock/unlock considered!!!
-  SLAVE1_SPI.setHomePositionSlave(&currentAbsPosPseudo, &currentAbsPosPseudo_ci);
-  delay(1000);
-  currentDirStatusPseudo = HIGH;
-  digitalWrite(dirPin_NANO, currentDirStatusPseudo); 
-  SLAVE1_SPI.setHomePositionSlave(&currentAbsPosPseudo, &currentAbsPosPseudo_ci);
-  
-// NOW THAT I KNOW THAT I AM AT HOME POSITION MUST WRITE TO EEPROM
-  EEPROM.update(CD_EEPROM_ADDR, HIGH);
-  EEPROM.update(CP_EEPROM_ADDR, 7);
-  EEPROM.update(CS_EEPROM_ADDR, META_FINISHED);
-   
-  SLAVE1_SPI.readEEPROMsettingsSlave(pseudoID, &motor_new_state ,  &currentAbsPosPseudo_ci,  &currentDirStatusPseudo, &currentAbsPosPseudo);
+  //SLAVE1_SPI.readEEPROMsettingsSlave( pseudoID, &motor_new_state ,  &currentAbsPosPseudo_ci,  &currentDirStatusPseudo, &currentAbsPosPseudo);
+
+  return_function_state = SLAVE1_SPI.setHomePositionSlave( &motor_new_state, &currentAbsPosPseudo, &currentAbsPosPseudo_ci, &currentDirStatusPseudo, &homingHallActivated, &limitHallActivated);
+
+  return_function_state = SLAVE1_SPI.saveEEPROMsettingsSlave( &motor_new_state, &currentAbsPosPseudo_ci , &currentDirStatusPseudo);
+
+  //SLAVE1_SPI.readEEPROMsettingsSlave( pseudoID, &motor_new_state ,  &currentAbsPosPseudo_ci,  &currentDirStatusPseudo, &currentAbsPosPseudo);
 
 }  // end of setup
-
 
 void loop (void)
 {
@@ -135,7 +148,8 @@ void loop (void)
   {
         // Calls function connectPseudoSlave()  that reads from EEPROM and return slave ID   
         slaveID  = SLAVE1_SPI.connectPseudoSlave();
-        Serial.print("Slave sent this ID to Master:"); Serial.println(slaveID);
+        Serial.print("Slave sent this ID to Master:"); 
+        Serial.println(slaveID);
         
         // ID values must agree in order connaection to be achieved
         if (slaveID == pseudoID)
@@ -165,6 +179,23 @@ void loop (void)
         delay(1);
    }
 
+
+  if ( GIVE_CP )
+  {
+        return_function_state = SLAVE1_SPI.readCurrentAnatomySlave(&motor_current_ci);
+        if (return_function_state)
+        {
+          current_position_sent = true;
+          Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.print("   ]   [   CURRENT POSITION:"); Serial.print(motor_current_ci); Serial.println("   ]   ACCEPTED"); 
+        }
+        else
+        {
+          Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.print("   ]   [   CURRENT POSITION:"); Serial.print(motor_current_ci); Serial.println("   ]   DECLINED"); 
+          current_position_sent = false;
+        }
+        delay(1);
+   }
+   
   if ( SET_GOAL_POS )
   {
         //motor_new_state = STATE_LOCKED;
@@ -301,6 +332,7 @@ void loop (void)
   Serial.print("SAVE_GLOBALS_TO_EEPROM :"); Serial.println(SAVE_GLOBALS_TO_EEPROM);
   Serial.print("INDICATE_META_REPEATS :"); Serial.println(INDICATE_META_REPEATS);   
  */
+ 
 /*
  * WELCOME TO PARANOIA - MAKES SURE NO DUPLICATED BOOL VALUES GIVEN TO SLAVE
  */
@@ -315,3 +347,16 @@ void loop (void)
 
   delay(500);           // specify frequency slave receives/responds
 }  // end of loop
+
+/*
+ *  INTERRUPT FUNCTIONS USED
+ */
+void changePseudoDirInterrupt()
+{
+  limitHallActivated = true;
+}
+
+void beginHomingCalibrationInterrupt()
+{
+  homingHallActivated = true;
+}

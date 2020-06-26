@@ -2,8 +2,10 @@
  *  Local Git Directory: ~/Arduino/MetaLunokhod101_Development/SPI/using_ISR_simple_complete/ using_ISR_simple_complete_master
  *  Hard linked using  : ln ~/Arduino/SPI/using_ISR_simple_complete/using_ISR_simple_complete_master/using_ISR_simple_complete_master.ino ./using_ISR_simple_complete_master.ino
  */
- 
-#include <SPI.h>
+// Used Libraries
+#include <stdlib.h>
+#include <stdio.h>
+//#include <SPI.h>
 #include "PseudoSPIcommMetamorphicManipulator.h"
 
 /*
@@ -19,7 +21,7 @@ byte desiredAnatomy[] = {2,4};                  // initialize ci for desired ana
 const int TOTAL_PSEUDOS_CONNECTED = 1;
 int pseudoIDs[]       = {PSEUDO1_ID};
 int ssPins[]          = {SSpinPseudo1};
-byte desiredAnatomy[] = {8,6,7};                  // initialize ci for desired anatomy(these are the GP values given in setGoalPositionMaster function)
+byte desiredAnatomy[] = {6,7,8};                  // initialize ci for desired anatomy(these are the GP values given in setGoalPositionMaster function)
 byte anatomy_counter  = 0;                         // just to check repeat mode
 
 byte CURRENT_STATE[sizeof(pseudoIDs)];        // empty states initialization array
