@@ -107,6 +107,7 @@ vector<unsigned long> PROFILE_STEPS;
 vector<double> vector_for_trajectoryVelocity; 
 byte currentDirStatus;
 double currentAbsPos_double;
+unsigned long currentAbsPos;
 double VelocityLimitStp;
 double AccelerationLimitStp;
 double MaxPosLimitStp;
@@ -347,7 +348,8 @@ void setup() {
         Serial.println("[   MASTER:  ]  STARTED HOMING ACTIVE JOINT MOTORS");
 
         // HOMING STEPPER
-        stp.setStepperHomePositionSlow();
+        stp.setStepperHomePositionSlow(&currentAbsPos_double, &currentAbsPos);
+
         // HOMING DYNAMIXELS
         dxlGoalPos dxl_goal_pos = {0,0,0};
         return_function_state = dxl.syncSetGoalPosition(dxl_id, sizeof(dxl_id), dxl_goal_pos, sizeof(dxl_goal_pos), groupSyncWriteGoalPos,  packetHandler, portHandler);
@@ -447,9 +449,10 @@ void setup() {
 
         Serial.println("[   MASTER:  ]  [INFO] SETTING NEW CONFIGURATION");
         
-        syncP2Ptrapz_execution(DxlTrapzProfParams_forP2P, StpTrapzProfParams, TrapzProfParams_size, groupSyncWrite_GP_A_V_LED, groupSyncWrite_TORQUE_ENABLE, groupSyncRead_PP_MV, portHandler, packetHandler);
+        syncP2Ptrapz_execution(DxlTrapzProfParams_forP2P, StpTrapzProfParams, TrapzProfParams_size, &currentDirStatus, groupSyncWrite_GP_A_V_LED, groupSyncWrite_TORQUE_ENABLE, groupSyncRead_PP_MV, portHandler, packetHandler);
 
         Serial.println("[   MASTER:  ]  [INFO] NEW CONFIGURATION SET");
+
     }
     else
     {

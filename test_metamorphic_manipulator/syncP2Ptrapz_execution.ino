@@ -1,4 +1,4 @@
-void syncP2Ptrapz_execution(typeDxlTrapzProfParams_forP2P DxlTrapzProfParams_forP2P[] , double * StpTrapzProfParams, int TrapzProfParams_size, dynamixel::GroupSyncWrite groupSyncWrite_GP_A_V_LED, dynamixel::GroupSyncWrite groupSyncWrite_TORQUE_ENABLE, dynamixel::GroupSyncRead groupSyncRead_PP_MV, dynamixel::PortHandler *portHandler, dynamixel::PacketHandler *packetHandler)
+void syncP2Ptrapz_execution(typeDxlTrapzProfParams_forP2P DxlTrapzProfParams_forP2P[] , double * StpTrapzProfParams, int TrapzProfParams_size, byte * currentDirStatus, dynamixel::GroupSyncWrite groupSyncWrite_GP_A_V_LED, dynamixel::GroupSyncWrite groupSyncWrite_TORQUE_ENABLE, dynamixel::GroupSyncRead groupSyncRead_PP_MV, dynamixel::PortHandler *portHandler, dynamixel::PacketHandler *packetHandler)
 {
     /*
      *  Emulates SimpleSyncP2P_TrapzVelProf_SDK
@@ -23,6 +23,8 @@ void syncP2Ptrapz_execution(typeDxlTrapzProfParams_forP2P DxlTrapzProfParams_for
 
     double hRelStp = abs( StpTrapzProfParams[1] - StpTrapzProfParams[0]);
 
+    stp.setStepperDirStatus(StpTrapzProfParams, TrapzProfParams_size, currentDirStatus);
+
     TrajAssignedDuration = stp.returnTrajAssignedDurationProperties(DxlTimeExec_sec, hRelStp, storage_array_for_TrajAssignedDuration, storage_array_for_TrajAssignedDuration_size);
 
     segmentExistsTrapz = stp.segmentExists_TrapzVelProfile(storage_array_for_TrajAssignedDuration, storage_array_for_TrajAssignedDuration_size);
@@ -45,5 +47,10 @@ void syncP2Ptrapz_execution(typeDxlTrapzProfParams_forP2P DxlTrapzProfParams_for
      * V. After movement finishes, reads current position (for Dynamixels) and save to global variable (for stepper only)
      */
     return_function_state = dxl.syncGet_PP_MV( dxl_id, sizeof(dxl_id), dxl_moving, sizeof(dxl_moving), dxl_present_position, sizeof(dxl_present_position) , groupSyncRead_PP_MV, groupSyncWrite_TORQUE_ENABLE, packetHandler, portHandler);
+
+    // Save to global variable
+    currentAbsPos_double = StpTrapzProfParams[1];
+    // Save in EEPROM
+	EEPROM.put(CP_JOINT1_STEPPER_EEPROM_ADDR, &currentAbsPos_double);
 
 }
