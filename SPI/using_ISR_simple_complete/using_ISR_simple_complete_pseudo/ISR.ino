@@ -50,6 +50,22 @@ ISR (SPI_STC_vect)
         }
         break;
 
+      case CMD_GIVE_CP:
+        // ISR -> loop
+        GIVE_CP = true;               // change flag for loop execution 
+        
+        // ISR <- loop      
+        if(!current_state_sent)       // read flag from loop that relates to new state
+        {
+            SPDR = IS_TALKING;
+        }
+        else
+        {
+            SPDR = motor_current_ci;
+            GIVE_CP = false;          // change ISR to loop flag to stop loop execution  
+        }
+      break;
+        
       case c1 ... c13:                // this case is when user sets goal position
         // ISR -> loop
         SET_GOAL_POS = true;
@@ -115,6 +131,20 @@ ISR (SPI_STC_vect)
         }
         break; 
 
+      case CMD_HOME:
+        HOME_MOTOR = true;
+        
+        if(!motor_homed)
+        {
+            SPDR = IS_TALKING;
+        }
+        else
+        {
+            SPDR = motor_new_state;
+            HOME_MOTOR = false;           
+        }
+        break;   
+
       case CMD_EXIT_META_EXEC:
         SAVE_GLOBALS_TO_EEPROM = true;
 
@@ -142,7 +172,7 @@ ISR (SPI_STC_vect)
             INDICATE_META_REPEATS = false;
         }
         break;
-        
+
       default:
 
           SPDR = IS_TALKING;

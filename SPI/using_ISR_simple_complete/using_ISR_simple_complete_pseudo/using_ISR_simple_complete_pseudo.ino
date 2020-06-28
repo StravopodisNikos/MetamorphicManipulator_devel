@@ -25,6 +25,7 @@ bool return_function_state;
 volatile bool MOVE_MOTOR;
 volatile bool LOCK_MOTOR;
 volatile bool UNLOCK_MOTOR;
+volatile bool HOME_MOTOR;
 volatile bool GIVE_CS;
 volatile bool GIVE_CP;
 volatile bool CONNECT2MASTER;
@@ -36,6 +37,7 @@ volatile bool INDICATE_META_REPEATS;
 volatile bool motor_finished        = false;
 volatile bool motor_locked          = false;
 volatile bool motor_unlocked        = false;
+volatile bool motor_homed           = false;
 volatile bool current_state_sent    = false;
 volatile bool current_position_sent = false;
 volatile bool connected2master      = false;
@@ -111,14 +113,16 @@ void setup (void)
 
   //digitalWrite(TXled_Pin,LOW); digitalWrite(RXled_Pin,LOW);
 
-// SETUP BEFORE ASSEMBLY
+  delay(1000);
+  
+// READ SETTINGS FROM EEPROM
   //SLAVE1_SPI.setupEEPROMslave( pseudoID, PI/2, -PI/2, 0.2617994);   // LAST EXECUTION Wed 18.3.2020
 
   //SLAVE1_SPI.readEEPROMsettingsSlave( pseudoID, &motor_new_state ,  &currentAbsPosPseudo_ci,  &currentDirStatusPseudo, &currentAbsPosPseudo);
 
-  return_function_state = SLAVE1_SPI.setHomePositionSlave( &motor_new_state, &currentAbsPosPseudo, &currentAbsPosPseudo_ci, &currentDirStatusPseudo, &homingHallActivated, &limitHallActivated);
-
-  return_function_state = SLAVE1_SPI.saveEEPROMsettingsSlave( &motor_new_state, &currentAbsPosPseudo_ci , &currentDirStatusPseudo);
+  //return_function_state = SLAVE1_SPI.setHomePositionSlave( &motor_new_state, &currentAbsPosPseudo, &currentAbsPosPseudo_ci, &currentDirStatusPseudo, &homingHallActivated, &limitHallActivated);
+ 
+  //return_function_state = SLAVE1_SPI.saveEEPROMsettingsSlave( &motor_new_state, &currentAbsPosPseudo_ci , &currentDirStatusPseudo);
 
   //SLAVE1_SPI.readEEPROMsettingsSlave( pseudoID, &motor_new_state ,  &currentAbsPosPseudo_ci,  &currentDirStatusPseudo, &currentAbsPosPseudo);
 
@@ -272,6 +276,24 @@ void loop (void)
         }           
   }
 
+  if ( HOME_MOTOR )
+  {
+        // Calls function lockPseudoSlave
+        return_function_state = SLAVE1_SPI.setHomePositionSlave( &motor_new_state, &currentAbsPosPseudo, &currentAbsPosPseudo_ci, &currentDirStatusPseudo, &homingHallActivated, &limitHallActivated);
+       
+        if (return_function_state)
+        {
+          Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.print("   ]   [   CURRENT STATUS:"); Serial.print(STATE_HOMED_STRING); Serial.println("   ]   SUCCESS");          
+          motor_homed = true;
+          // here motor_new_state is returned from the function call !!!              
+        }
+        else
+        {
+          Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.print("   ]   [   CURRENT STATUS:"); Serial.print(STATE_HOMED_STRING); Serial.println("   ]   FAILED");     
+          motor_homed = false;              
+        }        
+  }
+
   if ( SAVE_GLOBALS_TO_EEPROM )     // saves global variables to EEPROM and indicates meta_exits
   {
         // Calls function saveEEPROMsettingsSlave
@@ -339,6 +361,7 @@ void loop (void)
   MOVE_MOTOR        = false;
   LOCK_MOTOR        = false;
   UNLOCK_MOTOR      = false;
+  HOME_MOTOR        = false;
   GIVE_CS           = false;
   CONNECT2MASTER    = false;
   SET_GOAL_POS      = false;
