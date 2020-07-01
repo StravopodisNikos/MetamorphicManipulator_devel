@@ -55,13 +55,13 @@ ISR (SPI_STC_vect)
         GIVE_CP = true;               // change flag for loop execution 
         
         // ISR <- loop      
-        if(!current_state_sent)       // read flag from loop that relates to new state
+        if(!current_position_sent)       // read flag from loop that relates to new state
         {
             SPDR = IS_TALKING;
         }
         else
         {
-            SPDR = motor_current_ci;
+            SPDR = CURRENT_Ci_IDENTITY;
             GIVE_CP = false;          // change ISR to loop flag to stop loop execution  
         }
       break;
@@ -173,6 +173,20 @@ ISR (SPI_STC_vect)
         }
         break;
 
+      case CMD_SAVE_EEPROM:
+        SAVE_EEPROM = true;
+
+        if (!home_saved_to_eeprom)
+        {
+            SPDR = IS_TALKING;
+        }
+        else
+        {
+            SPDR = motor_new_state;
+            SAVE_EEPROM = false;
+        }
+        break;
+        
       default:
 
           SPDR = IS_TALKING;

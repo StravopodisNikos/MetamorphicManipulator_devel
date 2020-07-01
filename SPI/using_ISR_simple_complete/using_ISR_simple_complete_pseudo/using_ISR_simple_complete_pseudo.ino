@@ -32,6 +32,7 @@ volatile bool CONNECT2MASTER;
 volatile bool SET_GOAL_POS;
 volatile bool SAVE_GLOBALS_TO_EEPROM;
 volatile bool INDICATE_META_REPEATS;
+volatile bool SAVE_EEPROM;
 
 //  STATES INFO:  LOOP->ISR (SLAVE->MASTER)
 volatile bool motor_finished        = false;
@@ -44,13 +45,15 @@ volatile bool connected2master      = false;
 volatile bool goal_position_set     = false;
 volatile bool globals_saved_to_eeprom     = false;
 volatile bool leds_indicated_meta_repeats = false;
+volatile bool home_saved_to_eeprom     = false;
 
 volatile bool homingHallActivated   = false;
 volatile bool limitHallActivated    = false;
 
 // bytes accessed by loop + ISR
 volatile byte motor_new_state;
-volatile byte motor_current_ci;       
+volatile byte motor_current_ci;
+volatile byte CURRENT_Ci_IDENTITY;       
 volatile byte goal_ci;
 volatile byte slaveID;
 
@@ -74,6 +77,8 @@ void setup (void)
 {
   Serial.begin (115200);
 
+  Serial.println("STARTING SLAVE...");
+  
 // SLAVE PINMODE
   pinMode(SCK_NANO, OUTPUT);
   pinMode(MOSI_NANO, INPUT);
@@ -100,8 +105,8 @@ void setup (void)
   digitalWrite(RELAY_lock_Pin2, HIGH);                  //  remains locked when when NO connected
 
 // SLAVE EXTERNAL INTERRUPTS CONFIGURATION
-  attachInterrupt(digitalPinToInterrupt(pseudoLimitSwitch_Pin), changePseudoDirInterrupt, RISING);
-  attachInterrupt(digitalPinToInterrupt(hallSwitch_Pin), beginHomingCalibrationInterrupt, RISING);
+  //attachInterrupt(digitalPinToInterrupt(pseudoLimitSwitch_Pin), changePseudoDirInterrupt, RISING);
+  //attachInterrupt(digitalPinToInterrupt(hallSwitch_Pin), beginHomingCalibrationInterrupt, RISING);
   
   homingHallActivated = false;
   limitHallActivated  = false;
@@ -110,10 +115,8 @@ void setup (void)
   SPCR |= _BV(SPE);           // turn on SPI in slave mode
 
   SPCR |= _BV(SPIE);          // turn on interrupts
-
+  //SPI.attachInterrupt();
   //digitalWrite(TXled_Pin,LOW); digitalWrite(RXled_Pin,LOW);
-
-  delay(1000);
   
 // READ SETTINGS FROM EEPROM
   //SLAVE1_SPI.setupEEPROMslave( pseudoID, PI/2, -PI/2, 0.2617994);   // LAST EXECUTION Wed 18.3.2020
@@ -135,15 +138,19 @@ void loop (void)
   {
       if (digitalRead (ssPins[i]) == HIGH)
       {
-          Serial.println("RESET VALUES");
+          //Serial.println("RESET VALUES");
           //command = 0;
+          connected2master = false;
           current_state_sent = false;
           goal_position_set = false;
           motor_finished = false;
           motor_locked = false;
           motor_unlocked = false;
+          motor_homed    = false;
           globals_saved_to_eeprom = false;
           leds_indicated_meta_repeats = false;
+          home_saved_to_eeprom = false;
+          current_position_sent = false;
       }
   } 
 
@@ -152,17 +159,17 @@ void loop (void)
   {
         // Calls function connectPseudoSlave()  that reads from EEPROM and return slave ID   
         slaveID  = SLAVE1_SPI.connectPseudoSlave();
-        Serial.print("Slave sent this ID to Master:"); 
-        Serial.println(slaveID);
+        Serial.print("[   INFO   ]  Slave sent this ID to Master:"); Serial.println(slaveID); 
         
-        // ID values must agree in order connaection to be achieved
-        if (slaveID == pseudoID)
+        if (slaveID == pseudoID)            // ID values must agree in order connection to be achieved
         {
           connected2master = true;          // Reading ID from EEPROM completed...
+          Serial.println("[   INFO   ]  CONNECTED");
         }
         else
         {
           connected2master = false;          // Reading ID from EEPROM completed...
+          Serial.println("[   INFO   ]  DISCONNECTED");
         }
         delay(1);
   }
@@ -180,13 +187,13 @@ void loop (void)
           Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.print("   ]   [   CURRENT STATE:"); Serial.print(motor_new_state); Serial.println("   ]   DECLINED"); 
           current_state_sent = false;
         }
-        delay(1);
+        //delay(1);
    }
 
 
   if ( GIVE_CP )
   {
-        return_function_state = SLAVE1_SPI.readCurrentAnatomySlave(&motor_current_ci);
+        return_function_state = SLAVE1_SPI.readCurrentAnatomySlave(&motor_current_ci, &CURRENT_Ci_IDENTITY);
         if (return_function_state)
         {
           current_position_sent = true;
@@ -197,21 +204,22 @@ void loop (void)
           Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.print("   ]   [   CURRENT POSITION:"); Serial.print(motor_current_ci); Serial.println("   ]   DECLINED"); 
           current_position_sent = false;
         }
+        currentAbsPosPseudo_ci = motor_current_ci;
         delay(1);
    }
    
   if ( SET_GOAL_POS )
   {
         //motor_new_state = STATE_LOCKED;
-        // Calls function setGoalPositionSlave
-        Serial.print("I go to     : "); Serial.println(goal_ci);
-        Serial.print("My state is :"); Serial.println(motor_new_state);
-        Serial.print("My current ci is :"); Serial.println(currentAbsPosPseudo_ci);
-        //delay(5000);
-
+        // Calls function setGoalPositionSlave2
+ 
         noInterrupts();
         byte PSEUDO_GOAL_POSITION = goal_ci;
         interrupts();
+
+        Serial.print("[INFO]:   [   PSEUDO:"); Serial.print(pseudoID); Serial.print("  ]   CURRENT  Ci:  [  "); Serial.print(currentAbsPosPseudo_ci); Serial.println("  ]");
+        Serial.print("[INFO]:   [   PSEUDO:"); Serial.print(pseudoID); Serial.print("  ]   GOAL     Ci:  [  "); Serial.print(PSEUDO_GOAL_POSITION); Serial.println("  ]");
+        
         return_function_state = SLAVE1_SPI.setGoalPositionSlave2( &PSEUDO_GOAL_POSITION, &currentAbsPosPseudo_ci, &RELATIVE_STEPS_TO_MOVE, &currentDirStatusPseudo, &motor_new_state );
         if (return_function_state)
         {
@@ -222,6 +230,7 @@ void loop (void)
         {
           goal_position_set = false;
         }
+        delay(1);
   }
 
   if ( MOVE_MOTOR )
@@ -230,14 +239,15 @@ void loop (void)
         return_function_state = SLAVE1_SPI.movePseudoSlave(&motor_new_state , &RELATIVE_STEPS_TO_MOVE);
         if (return_function_state)
         {
-          Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.println("   ]   [   CURRENT STATUS:"); Serial.print(STATE_IN_POSITION_STRING); Serial.println("   ]   SUCCESS");          
+          Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.print("   ]   [   CURRENT STATUS:"); Serial.print(STATE_IN_POSITION_STRING); Serial.println("   ]   SUCCESS");          
           motor_finished = true;          
         }
         else
         {
-          Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.println("   ]   [   CURRENT STATUS:"); Serial.print(STATE_IN_POSITION_STRING); Serial.println("   ]   FAILED");          
+          Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.print("   ]   [   CURRENT STATUS:"); Serial.print(STATE_IN_POSITION_STRING); Serial.println("   ]   FAILED");          
           motor_finished = false;
         }
+        delay(1);
   }
 
   if ( LOCK_MOTOR )
@@ -255,7 +265,8 @@ void loop (void)
         {
           Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.print("   ]   [   CURRENT STATUS:"); Serial.print(STATE_LOCKED_STRING); Serial.println("   ]   FAILED");     
           motor_locked = false;              
-        }        
+        }
+        delay(1);  
   }
 
   if ( UNLOCK_MOTOR )
@@ -273,7 +284,8 @@ void loop (void)
         {
           Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.print("   ]   [   CURRENT STATUS:"); Serial.print(STATE_UNLOCKED_STRING); Serial.println("   ]   FAILED");            
           motor_unlocked = false; 
-        }           
+        }
+        delay(1);           
   }
 
   if ( HOME_MOTOR )
@@ -291,29 +303,29 @@ void loop (void)
         {
           Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.print("   ]   [   CURRENT STATUS:"); Serial.print(STATE_HOMED_STRING); Serial.println("   ]   FAILED");     
           motor_homed = false;              
-        }        
+        }
+
+        Serial.print("[ INFO ] CURRENT Ci: [  "); Serial.print(currentAbsPosPseudo_ci); Serial.println(" ]");
+        delay(1);       
   }
 
   if ( SAVE_GLOBALS_TO_EEPROM )     // saves global variables to EEPROM and indicates meta_exits
   {
         // Calls function saveEEPROMsettingsSlave
-        //motor_new_state = META_FINISHED;
-        //return_function_state = true;
         return_function_state = SLAVE1_SPI.saveEEPROMsettingsSlave(&motor_new_state, &currentAbsPosPseudo_ci , &currentDirStatusPseudo);
 
         if (return_function_state)
         {  
           // LED indicate that Slave saved glabals to EEPROM (TxRx, 2X1000)
           Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.print("   ]   [   CURRENT STATUS:"); Serial.print(EXIT_METAMORPHOSIS); Serial.println("   ]   SUCCESS");  
-          //SLAVE1_SPI.txrxLEDSblink(2, 1000);
           globals_saved_to_eeprom = true;
         }
         else
         {
           Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.print("   ]   [   CURRENT STATUS:"); Serial.print(EXIT_METAMORPHOSIS); Serial.println("   ]   FAILED");  
-          //SLAVE1_SPI.txrxLEDSblink(4, 500);
           globals_saved_to_eeprom = false;
         }
+        delay(1);
   }
 
   if ( INDICATE_META_REPEATS )      // only indicates meta repeats, global not need to be saved - no fn executed
@@ -329,9 +341,24 @@ void loop (void)
         else
         {
           leds_indicated_meta_repeats = false;
-        }          
+        }
+        delay(1);        
   }
 
+  if ( SAVE_EEPROM )     
+  {
+        Serial.print("Here state must be 100:"); Serial.println(motor_new_state);
+        return_function_state = SLAVE1_SPI.saveEEPROMsettingsSlave( &motor_new_state, &currentAbsPosPseudo_ci , &currentDirStatusPseudo);
+        if (return_function_state)
+        {
+          home_saved_to_eeprom = true;
+        }
+        else
+        {
+          home_saved_to_eeprom = false;
+        }
+        delay(1);          
+  }
 /*
  * DEBUGGING MESSAGES
  */
@@ -363,12 +390,14 @@ void loop (void)
   UNLOCK_MOTOR      = false;
   HOME_MOTOR        = false;
   GIVE_CS           = false;
+  GIVE_CP           = false;
   CONNECT2MASTER    = false;
   SET_GOAL_POS      = false;
   SAVE_GLOBALS_TO_EEPROM  = false;
   INDICATE_META_REPEATS   = false;
-
-  delay(500);           // specify frequency slave receives/responds
+  SAVE_EEPROM       = false;
+  
+  delay(250);           // specify frequency slave receives/responds
 }  // end of loop
 
 /*
