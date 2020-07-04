@@ -54,7 +54,7 @@ bool metaExecution;                           // flag defined by META_EXECS
  */
 bool return_function_state;
 byte state_receive_from_slave;
-
+unsigned long time_now_micros;
 /*
  * USER SERIAL INPUT VARIABLES
  */
@@ -108,15 +108,14 @@ void setup (void)
     return_function_state = MASTER_SPI.connectPseudoMaster(pseudoIDs[pseudo_cnt], ssPins);
     if (return_function_state)
     {
-        MASTER_SPI.statusLEDblink(2, 500);
+        //MASTER_SPI.statusLEDblink(2, 500);
         Serial.print("[   MASTER:  ]"); Serial.print(" CONNECTED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   SUCCESS");
     }
     else
     {
-        MASTER_SPI.statusLEDblink(4, 250);
+        //MASTER_SPI.statusLEDblink(4, 250);
         Serial.print("[   MASTER:  ]"); Serial.print(" CONNECTED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   FAILED");
     }
-    delay(1);
   } // END IF PING
   
   //digitalWrite(TXled_Pin,LOW); digitalWrite(RXled_Pin,LOW);
@@ -393,6 +392,9 @@ void loop (void)
           if (return_function_state)
           {
               Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [     LOCKED     ]  SUCCESS");
+
+            // IF LOCKED SUCCESS CHANGE NEW POSITION
+            CURRENT_ANATOMY[pseudo_cnt] = home_ci;
           } 
           else
           {
@@ -425,6 +427,9 @@ void loop (void)
   END_ACTION        = false;
   END_HOME          = false;
     
-  delay(250);
+  //delay(250);
+  
+  time_now_micros = micros();
+  while(micros() < time_now_micros + 500){}
   
 } // END LOOP  
