@@ -66,7 +66,7 @@ ISR (SPI_STC_vect)
         }
       break;
         
-      case c1 ... c13:                // this case is when user sets goal position
+      case c1 ... c15:                // this case is when user sets goal position
         // ISR -> loop
         SET_GOAL_POS = true;
 

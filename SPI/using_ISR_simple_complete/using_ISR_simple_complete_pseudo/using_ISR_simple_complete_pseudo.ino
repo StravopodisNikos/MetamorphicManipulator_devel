@@ -16,8 +16,8 @@ int ssPins[1] = {SSpinPseudo1};
  */
 bool result;
 bool return_function_state;
+unsigned long time_now_micros;
 
- unsigned long time_now_micros;
 /* 
  *  Variables used in ISR
  */
@@ -171,7 +171,9 @@ void loop (void)
           connected2master = false;          // Reading ID from EEPROM completed...
           Serial.println("[   INFO   ]  DISCONNECTED");
         }
-        delay(1);
+        //delay(1);
+        time_now_micros = micros();
+        while(micros() < time_now_micros + 500){}
   }
 
   if ( GIVE_CS )
@@ -187,8 +189,8 @@ void loop (void)
           Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.print("   ]   [   CURRENT STATE:"); Serial.print(motor_new_state); Serial.println("   ]   DECLINED"); 
           current_state_sent = false;
         }
-        //delay(1);
-   }
+        time_now_micros = micros();
+        while(micros() < time_now_micros + 500){}   }
 
 
   if ( GIVE_CP )
@@ -205,8 +207,8 @@ void loop (void)
           current_position_sent = false;
         }
         currentAbsPosPseudo_ci = motor_current_ci;
-        delay(1);
-   }
+        time_now_micros = micros();
+        while(micros() < time_now_micros + 500){}   }
    
   if ( SET_GOAL_POS )
   {
@@ -230,13 +232,13 @@ void loop (void)
         {
           goal_position_set = false;
         }
-        delay(1);
-  }
+        time_now_micros = micros();
+        while(micros() < time_now_micros + 500){}  }
 
   if ( MOVE_MOTOR )
   {
         // Calls function movePseudoSlave
-        return_function_state = SLAVE1_SPI.movePseudoSlave(&motor_new_state , &RELATIVE_STEPS_TO_MOVE);
+        return_function_state = SLAVE1_SPI.movePseudoSlave(&motor_new_state , &RELATIVE_STEPS_TO_MOVE, &limitHallActivated);
         if (return_function_state)
         {
           Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.print("   ]   [   CURRENT STATUS:"); Serial.print(STATE_IN_POSITION_STRING); Serial.println("   ]   SUCCESS");          
@@ -247,8 +249,8 @@ void loop (void)
           Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.print("   ]   [   CURRENT STATUS:"); Serial.print(STATE_IN_POSITION_STRING); Serial.println("   ]   FAILED");          
           motor_finished = false;
         }
-        delay(1);
-  }
+        time_now_micros = micros();
+        while(micros() < time_now_micros + 500){}  }
 
   if ( LOCK_MOTOR )
   {
@@ -266,8 +268,8 @@ void loop (void)
           Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.print("   ]   [   CURRENT STATUS:"); Serial.print(STATE_LOCKED_STRING); Serial.println("   ]   FAILED");     
           motor_locked = false;              
         }
-        delay(1);  
-  }
+        time_now_micros = micros();
+        while(micros() < time_now_micros + 500){}  }
 
   if ( UNLOCK_MOTOR )
   {
@@ -285,8 +287,8 @@ void loop (void)
           Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.print("   ]   [   CURRENT STATUS:"); Serial.print(STATE_UNLOCKED_STRING); Serial.println("   ]   FAILED");            
           motor_unlocked = false; 
         }
-        delay(1);           
-  }
+        time_now_micros = micros();
+        while(micros() < time_now_micros + 500){}  }
 
   if ( HOME_MOTOR )
   {
@@ -306,8 +308,8 @@ void loop (void)
         }
 
         Serial.print("[ INFO ] CURRENT Ci: [  "); Serial.print(currentAbsPosPseudo_ci); Serial.println(" ]");
-        delay(1);       
-  }
+        time_now_micros = micros();
+        while(micros() < time_now_micros + 500){}  }
 
   if ( SAVE_GLOBALS_TO_EEPROM )     // saves global variables to EEPROM and indicates meta_exits
   {
@@ -325,8 +327,8 @@ void loop (void)
           Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.print("   ]   [   CURRENT STATUS:"); Serial.print(EXIT_METAMORPHOSIS); Serial.println("   ]   FAILED");  
           globals_saved_to_eeprom = false;
         }
-        delay(1);
-  }
+        time_now_micros = micros();
+        while(micros() < time_now_micros + 500){}  }
 
   if ( INDICATE_META_REPEATS )      // only indicates meta repeats, global not need to be saved - no fn executed
   {
@@ -342,8 +344,8 @@ void loop (void)
         {
           leds_indicated_meta_repeats = false;
         }
-        delay(1);        
-  }
+        time_now_micros = micros();
+        while(micros() < time_now_micros + 500){}  }
 
   if ( SAVE_EEPROM )     
   {
@@ -357,8 +359,8 @@ void loop (void)
         {
           home_saved_to_eeprom = false;
         }
-        delay(1);          
-  }
+        time_now_micros = micros();
+        while(micros() < time_now_micros + 500){}  }
 /*
  * DEBUGGING MESSAGES
  */
@@ -397,7 +399,10 @@ void loop (void)
   INDICATE_META_REPEATS   = false;
   SAVE_EEPROM       = false;
   
-  delay(250);           // specify frequency slave receives/responds
+  //delay(250);           // specify frequency slave receives/responds
+  
+  time_now_micros = micros();
+  while(micros() < time_now_micros + 500){}
 }  // end of loop
 
 /*
