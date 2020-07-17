@@ -116,6 +116,10 @@
 #define PSEUDO_NUMBER5		5
 #define PSEUDO_NUMBER6		6
 
+// ============================================================================
+// SPI COMMUNICATION BYTES => MUST BE UNIQUE
+// ============================================================================
+
 // COMMANDS SENT -> in single byte transfer each ci is regarded as command!
 // ci's: these are the bytes given to setGoalPositionMaster() for desired anatomy Metamorphosis
 #define junk_command		0
@@ -137,9 +141,6 @@
 #define c15					15
 #define wrong_ci				16
 #define home_ci				8
-// ============================================================================
-// SPI COMMUNICATION BYTES => MUST BE UNIQUE
-// ============================================================================
 
 // COMMANDS FROM MASTER TO SLAVE
 #define CMD_LOCK		    	20
@@ -147,7 +148,8 @@
 #define CMD_SGP	  		30		// In single byte transfer is overrided
 #define CMD_MOVE			40
 #define CMD_STOP			41		// Danger Stop Event!
-#define CMD_HOME			42	
+#define CMD_HOME			42
+#define CMD_PRE_HOME        43	 
 #define CMD_CONNECT		     60
 #define CMD_GIVE_IS		     70
 #define CMD_GIVE_CS		     71
@@ -169,6 +171,10 @@
 #define META_FINISHED		117
 #define META_REPEAT			118
 #define BLOCKED			119
+#define STATE_ERROR			120
+
+#define OPERATION_HOME		150
+#define OPERATION_META		151
 
 #define slave_is_at_c1		201
 #define slave_is_at_c2		202
