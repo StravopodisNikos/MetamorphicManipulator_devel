@@ -25,6 +25,7 @@ unsigned long time_now_micros;
 volatile bool MOVE_MOTOR;
 volatile bool LOCK_MOTOR;
 volatile bool UNLOCK_MOTOR;
+volatile bool PRE_HOME_MOTOR;
 volatile bool HOME_MOTOR;
 volatile bool GIVE_CS;
 volatile bool GIVE_CP;
@@ -38,6 +39,7 @@ volatile bool SAVE_EEPROM;
 volatile bool motor_finished        = false;
 volatile bool motor_locked          = false;
 volatile bool motor_unlocked        = false;
+volatile bool motor_pre_homed       = false;
 volatile bool motor_homed           = false;
 volatile bool current_state_sent    = false;
 volatile bool current_position_sent = false;
@@ -45,7 +47,7 @@ volatile bool connected2master      = false;
 volatile bool goal_position_set     = false;
 volatile bool globals_saved_to_eeprom     = false;
 volatile bool leds_indicated_meta_repeats = false;
-volatile bool home_saved_to_eeprom     = false;
+volatile bool saved_to_eeprom             = false;
 
 volatile bool homingHallActivated   = false;
 volatile bool limitHallActivated    = false;
@@ -60,11 +62,12 @@ volatile byte slaveID;
 /*
  *   MOTOR MOVEMENT GLOBAL VARIABLES - ALWAYS INITIALIZED BY READING EEPROM AT setup()
  */
-byte  currentDirStatusPseudo        = LOW;
-int  currentMoveRelPseudo           = 0;    // can be initialized to 0 and change after 1st execution
+byte currentDirStatusPseudo        = LOW;
+int  currentMoveRelPseudo          = 0;    // can be initialized to 0 and change after 1st execution
 int  currentAbsPosPseudo;
 byte currentAbsPosPseudo_ci;
 int  RELATIVE_STEPS_TO_MOVE;
+byte operation_executed;
 
 int  theta_p_current_steps;
 float theta_p_goal;
@@ -149,7 +152,7 @@ void loop (void)
           motor_homed    = false;
           globals_saved_to_eeprom = false;
           leds_indicated_meta_repeats = false;
-          home_saved_to_eeprom = false;
+          saved_to_eeprom = false;
           current_position_sent = false;
       }
   } 
@@ -212,7 +215,6 @@ void loop (void)
    
   if ( SET_GOAL_POS )
   {
-        //motor_new_state = STATE_LOCKED;
         // Calls function setGoalPositionSlave2
  
         noInterrupts();
@@ -238,7 +240,7 @@ void loop (void)
   if ( MOVE_MOTOR )
   {
         // Calls function movePseudoSlave
-        return_function_state = SLAVE1_SPI.movePseudoSlave(&motor_new_state , &RELATIVE_STEPS_TO_MOVE, &limitHallActivated);
+        return_function_state = SLAVE1_SPI.movePseudoSlave(&motor_new_state , &RELATIVE_STEPS_TO_MOVE, &limitHallActivated, &operation_executed);
         if (return_function_state)
         {
           Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.print("   ]   [   CURRENT STATUS:"); Serial.print(STATE_IN_POSITION_STRING); Serial.println("   ]   SUCCESS");          
@@ -290,10 +292,28 @@ void loop (void)
         time_now_micros = micros();
         while(micros() < time_now_micros + 500){}  }
 
+  if ( PRE_HOME_MOTOR )
+  {
+        // Calls function lockPseudoSlave
+        return_function_state = SLAVE1_SPI.setPreHomePositionStateSlave( &motor_new_state);
+       
+        if (return_function_state)
+        {
+          Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.print("   ]   [   CURRENT STATUS:"); Serial.print(STATE_PRE_HOMED_STRING); Serial.println("   ]   SUCCESS");          
+          motor_pre_homed = true;
+        }
+        else
+        {
+          Serial.print("[   PSEUDO:"); Serial.print(pseudoID); Serial.print("   ]   [   CURRENT STATUS:"); Serial.print(STATE_PRE_HOMED_STRING); Serial.println("   ]   FAILED");     
+          motor_pre_homed = false;              
+        }
+        time_now_micros = micros();
+        while(micros() < time_now_micros + 500){}  }
+
   if ( HOME_MOTOR )
   {
         // Calls function lockPseudoSlave
-        return_function_state = SLAVE1_SPI.setHomePositionSlave( &motor_new_state, &currentAbsPosPseudo, &currentAbsPosPseudo_ci, &currentDirStatusPseudo, &homingHallActivated, &limitHallActivated);
+        return_function_state = SLAVE1_SPI.go2HomePositionSlave( &motor_new_state, &currentAbsPosPseudo, &currentAbsPosPseudo_ci, &currentDirStatusPseudo, &homingHallActivated, &limitHallActivated, &operation_executed);
        
         if (return_function_state)
         {
@@ -310,7 +330,7 @@ void loop (void)
         Serial.print("[ INFO ] CURRENT Ci: [  "); Serial.print(currentAbsPosPseudo_ci); Serial.println(" ]");
         time_now_micros = micros();
         while(micros() < time_now_micros + 500){}  }
-
+/*
   if ( SAVE_GLOBALS_TO_EEPROM )     // saves global variables to EEPROM and indicates meta_exits
   {
         // Calls function saveEEPROMsettingsSlave
@@ -346,18 +366,18 @@ void loop (void)
         }
         time_now_micros = micros();
         while(micros() < time_now_micros + 500){}  }
-
+*/
   if ( SAVE_EEPROM )     
   {
         Serial.print("Here state must be 100:"); Serial.println(motor_new_state);
-        return_function_state = SLAVE1_SPI.saveEEPROMsettingsSlave( &motor_new_state, &currentAbsPosPseudo_ci , &currentDirStatusPseudo);
+        return_function_state = SLAVE1_SPI.saveEEPROMsettingsSlave( &motor_new_state, &currentAbsPosPseudo_ci , &currentDirStatusPseudo, &operation_executed);
         if (return_function_state)
         {
-          home_saved_to_eeprom = true;
+          saved_to_eeprom = true;
         }
         else
         {
-          home_saved_to_eeprom = false;
+          saved_to_eeprom = false;
         }
         time_now_micros = micros();
         while(micros() < time_now_micros + 500){}  }
@@ -390,6 +410,7 @@ void loop (void)
   MOVE_MOTOR        = false;
   LOCK_MOTOR        = false;
   UNLOCK_MOTOR      = false;
+  PRE_HOME_MOTOR    = false;
   HOME_MOTOR        = false;
   GIVE_CS           = false;
   GIVE_CP           = false;

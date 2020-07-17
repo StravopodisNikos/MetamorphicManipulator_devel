@@ -131,6 +131,20 @@ ISR (SPI_STC_vect)
         }
         break; 
 
+      case CMD_PRE_HOME:
+        PRE_HOME_MOTOR = true;
+        
+        if(!motor_pre_homed)
+        {
+            SPDR = IS_TALKING;
+        }
+        else
+        {
+            SPDR = motor_new_state;
+            PRE_HOME_MOTOR = false;           
+        }
+        break;  
+
       case CMD_HOME:
         HOME_MOTOR = true;
         
@@ -144,7 +158,7 @@ ISR (SPI_STC_vect)
             HOME_MOTOR = false;           
         }
         break;   
-
+/*
       case CMD_EXIT_META_EXEC:
         SAVE_GLOBALS_TO_EEPROM = true;
 
@@ -172,11 +186,11 @@ ISR (SPI_STC_vect)
             INDICATE_META_REPEATS = false;
         }
         break;
-
+*/
       case CMD_SAVE_EEPROM:
         SAVE_EEPROM = true;
 
-        if (!home_saved_to_eeprom)
+        if (!saved_to_eeprom)
         {
             SPDR = IS_TALKING;
         }
