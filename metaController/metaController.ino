@@ -380,65 +380,69 @@ void loop (void)
         
         } // END FOR READ STATE
 
-        for (int pseudo_cnt = 0; pseudo_cnt < TOTAL_PSEUDOS_CONNECTED; pseudo_cnt++) 
-        {   
+        if(homeExecution){
+          for (int pseudo_cnt = 0; pseudo_cnt < TOTAL_PSEUDOS_CONNECTED; pseudo_cnt++) 
+          {   
+  
+              return_function_state = MASTER_SPI.setPreHomePositionStateMaster(pseudoIDs[pseudo_cnt], ssPins, &CURRENT_STATE_MASTER[pseudo_cnt]);
+              if (return_function_state)
+              {
+                  Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [      READY     ]  SUCCESS");
+              }
+              else
+              {
+                  Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [      READY     ]  FAILED");
+              }   
+  
+              return_function_state = MASTER_SPI.unlockPseudoMaster(pseudoIDs[pseudo_cnt], ssPins, &CURRENT_STATE_MASTER[pseudo_cnt]);
+              if (return_function_state)
+              {
+                  Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [    UNLOCKED    ]  SUCCESS");
+              }
+              else
+              {
+                  Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [    UNLOCKED    ]  FAILED");
+              }   
+              
+              return_function_state = MASTER_SPI.go2HomePositionMaster(pseudoIDs[pseudo_cnt], ssPins, &CURRENT_STATE_MASTER[pseudo_cnt]);
+              if (return_function_state)
+              {
+                  Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [     HOMED     ]  SUCCESS");
+              }
+              else
+              {
+                  Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [     HOMED     ]  FAILED");
+              }
+                          
+              return_function_state = MASTER_SPI.lockPseudoMaster(pseudoIDs[pseudo_cnt], ssPins, &CURRENT_STATE_MASTER[pseudo_cnt]);
+              if (return_function_state)
+              {
+                  Serial.print(F("[   MASTER:  ]")); Serial.print(F(" TALKED TO: [   PSEUDO: ")); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println(F("  ]   STATUS:  [     LOCKED     ]  SUCCESS"));
+  
+                  // IF LOCKED SUCCESS CHANGE NEW POSITION
+                  CURRENT_ANATOMY[pseudo_cnt] = home_ci;
+              } 
+              else
+              {
+                  Serial.print(F("[   MASTER:  ]")); Serial.print(F(" TALKED TO: [   PSEUDO: ")); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println(F("  ]   STATUS:  [     LOCKED     ]  FAILED"));
+              }
+  
+              Serial.print("State before save EEPROM:"); Serial.println(CURRENT_STATE_MASTER[pseudo_cnt]);
+              return_function_state = MASTER_SPI.saveEEPROMsettingsMaster(pseudoIDs[pseudo_cnt], ssPins, &CURRENT_STATE_MASTER[pseudo_cnt]);
+              if (return_function_state)
+              {
+                  Serial.print(F("[   MASTER:  ]")); Serial.print(F(" TALKED TO: [   PSEUDO: ")); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println(F("  ]   STATUS:  [   SAVED EEPROM   ]  SUCCESS"));
+              } 
+              else
+              {
+                  Serial.print(F("[   MASTER:  ]")); Serial.print(F(" TALKED TO: [   PSEUDO: ")); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println(F("  ]   STATUS:  [   SAVED EEPROM   ]  FAILED"));
+              }
+              
+          }
 
-            return_function_state = MASTER_SPI.setPreHomePositionStateMaster(pseudoIDs[pseudo_cnt], ssPins, &CURRENT_STATE_MASTER[pseudo_cnt]);
-            if (return_function_state)
-            {
-                Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [      READY     ]  SUCCESS");
-            }
-            else
-            {
-                Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [      READY     ]  FAILED");
-            }   
-
-            return_function_state = MASTER_SPI.unlockPseudoMaster(pseudoIDs[pseudo_cnt], ssPins, &CURRENT_STATE_MASTER[pseudo_cnt]);
-            if (return_function_state)
-            {
-                Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [    UNLOCKED    ]  SUCCESS");
-            }
-            else
-            {
-                Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [    UNLOCKED    ]  FAILED");
-            }   
-            
-            return_function_state = MASTER_SPI.go2HomePositionMaster(pseudoIDs[pseudo_cnt], ssPins, &CURRENT_STATE_MASTER[pseudo_cnt]);
-            if (return_function_state)
-            {
-                Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [     HOMED     ]  SUCCESS");
-            }
-            else
-            {
-                Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [     HOMED     ]  FAILED");
-            }
-                        
-            return_function_state = MASTER_SPI.lockPseudoMaster(pseudoIDs[pseudo_cnt], ssPins, &CURRENT_STATE_MASTER[pseudo_cnt]);
-            if (return_function_state)
-            {
-                Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [     LOCKED     ]  SUCCESS");
-
-                // IF LOCKED SUCCESS CHANGE NEW POSITION
-                CURRENT_ANATOMY[pseudo_cnt] = home_ci;
-            } 
-            else
-            {
-                Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [     LOCKED     ]  FAILED");
-            }
-
-            Serial.print("State before save EEPROM:"); Serial.println(CURRENT_STATE_MASTER[pseudo_cnt]);
-            return_function_state = MASTER_SPI.saveEEPROMsettingsMaster(pseudoIDs[pseudo_cnt], ssPins, &CURRENT_STATE_MASTER[pseudo_cnt]);
-            if (return_function_state)
-            {
-                Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [   SAVED EEPROM   ]  SUCCESS");
-            } 
-            else
-            {
-                Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [   SAVED EEPROM   ]  FAILED");
-            }
-            
+          homeExecution = false;
         }
-
+        
         END_METAMORPHOSIS = false;
         END_ACTION        = false;
         END_HOME          = true;
