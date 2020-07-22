@@ -158,7 +158,22 @@ ISR (SPI_STC_vect)
             HOME_MOTOR = false;           
         }
         break;   
-/*
+
+      case CMD_SAVE_EEPROM:
+        SAVE_EEPROM = true;
+
+        if (!saved_to_eeprom)
+        {
+            SPDR = IS_TALKING;
+        }
+        else
+        {
+            SPDR = motor_new_state;
+            SAVE_EEPROM = false;
+        }
+        break;
+
+        /*
       case CMD_EXIT_META_EXEC:
         SAVE_GLOBALS_TO_EEPROM = true;
 
@@ -187,20 +202,7 @@ ISR (SPI_STC_vect)
         }
         break;
 */
-      case CMD_SAVE_EEPROM:
-        SAVE_EEPROM = true;
 
-        if (!saved_to_eeprom)
-        {
-            SPDR = IS_TALKING;
-        }
-        else
-        {
-            SPDR = motor_new_state;
-            SAVE_EEPROM = false;
-        }
-        break;
-        
       default:
 
           SPDR = IS_TALKING;
