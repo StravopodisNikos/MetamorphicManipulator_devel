@@ -104,8 +104,8 @@ void setup (void)
   digitalWrite(enabPin_NANO, LOW);
   digitalWrite(dirPin_NANO, LOW);
 
-  digitalWrite(RELAY_lock_Pin, HIGH);                   //  remains locked when when NO connected 
-  digitalWrite(RELAY_lock_Pin2, HIGH);                  //  remains locked when when NO connected
+  digitalWrite(RELAY_lock_Pin, LOW);                   //  remains locked when when NO connected 
+  digitalWrite(RELAY_lock_Pin2, LOW);                  //  remains locked when when NO connected
 
 // SLAVE EXTERNAL INTERRUPTS CONFIGURATION
   //attachInterrupt(digitalPinToInterrupt(pseudoLimitSwitch_Pin), changePseudoDirInterrupt, RISING);

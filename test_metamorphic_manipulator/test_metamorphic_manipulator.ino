@@ -209,60 +209,12 @@ void setup() {
       Serial.println("FAILED");
     }
 
-    // I.a.4.  Setup MASTER(OpenCR) Pinmodes for SPI Communication
-    // MASTER PINMODE 
-    pinMode(SCK_NANO, OUTPUT);
-    pinMode(MOSI_NANO, OUTPUT);
-    pinMode(MISO_NANO, INPUT);
-    for (size_t i = 0; i < sizeof(ssPins); i++)
-    {
-      pinMode(ssPins[i], OUTPUT);
-      pinMode(ssPins[i], HIGH);
-    }
-   
-  // I.a.4.1 Start SPI Com Protocol
-  SPI.begin ();
-  SPI.setClockDivider(SPI_CLOCK_DIV32);      // Slow down the master a bit
 
-  // I.a.4.2 Ping Pseudos-Each pseudo pinged: Blinks(2,500) green Led(ConnectedLED)
-
-  for (int pseudo_cnt = 0; pseudo_cnt < TOTAL_PSEUDOS_CONNECTED; pseudo_cnt++) 
-  {
-    return_function_state = MASTER_SPI.connectPseudoMaster(pseudoIDs[pseudo_cnt], ssPins);
-    if (return_function_state)
-    {
-        //MASTER_SPI.statusLEDblink(2, 500);
-        Serial.print("[   MASTER:  ]"); Serial.print(" CONNECTED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   SUCCESS");
-    }
-    else
-    {
-        //MASTER_SPI.statusLEDblink(4, 250);
-        Serial.print("[   MASTER:  ]"); Serial.print(" CONNECTED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   FAILED");
-    }
-    delay(1);
-  } // END IF PING
 
     /*
      *  SET/READ EEPROM SETTING FOR ACTIVE AND PASSIVE JOINT MOTORS
      */
 
-    // II.a.1 Read current anatomy -> saved in byte array: CURRENT_ANATOMY
-    Serial.println("[   MASTER:  ]  Extracting Present Anatomy");
-
-    for (int pseudo_cnt = 0; pseudo_cnt < TOTAL_PSEUDOS_CONNECTED; pseudo_cnt++) 
-    {
-        return_function_state = MASTER_SPI.readCurrentAnatomyMaster(pseudoIDs[pseudo_cnt], ssPins, CURRENT_ANATOMY);
-        if (return_function_state)
-        {
-            Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [  READ CURRENT Ci  ]  SUCCESS");
-        }
-        else
-        {
-            Serial.print("[   MASTER:  ]"); Serial.print(" TALKED TO: [   PSEUDO: "); Serial.print(pseudoIDs[pseudo_cnt]); Serial.println("  ]   STATUS:  [  READ CURRENT Ci  ]  FAILED");
-        }
-
-        // Here Anatomy MUST BE PRINTED IN SERIAL MONITOR!
-    }
 
     // II.b.1 Setup current position/velocity/acceleration settings of stepper Joint1 
     Serial.println("[   MASTER:  ]  Setup STEPPER in OpenCR EEPROM?: [Y/N] ");

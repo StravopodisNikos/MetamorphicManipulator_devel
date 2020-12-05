@@ -89,7 +89,7 @@ void setup (void)
   for (size_t i = 0; i < sizeof(ssPins); i++)
   {
     pinMode(ssPins[i], OUTPUT);
-    pinMode(ssPins[i], HIGH);
+    digitalWrite(ssPins[i], HIGH);
   }
 
 
