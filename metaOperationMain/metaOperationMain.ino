@@ -50,6 +50,10 @@ int dxl_motors_used = 3;
 int Nema34_id = 1;
 
 // Declare extern variables defined in DynamixelProPlusMetamorphicManipulator
+int dxl_comm_result = COMM_TX_FAIL;
+bool dxl_addparam_result;
+uint8_t dxl_error; 
+uint16_t dxl_model_number[3];
 uint8_t   dxl_ledBLUE_value[]  = {0, 255};
 uint8_t   dxl_ledGREEN_value[] = {0, 255};
 uint8_t   dxl_ledRED_value[]   = {0, 255};
@@ -112,8 +116,8 @@ String user_input_string;
 int user_input_int;
 const char * meta_exec = "MET";
 const char * act_exec  = "ACT";
-const char * act_exec  = "HOME";
-const char * act_exec  = "P2P";
+const char * home_exec  = "HOME";
+const char * p2p_exec  = "P2P";
 const char * meta_cont = "R";
 const char * meta_exit = "E";
 const char * YES = "Y";
@@ -139,6 +143,7 @@ dynamixel::PacketHandler *packetHandler = dynamixel::PacketHandler::getPacketHan
 dynamixel::GroupSyncWrite groupSyncWrite_TORQUE_ENABLE(portHandler, packetHandler, ADDR_PRO_TORQUE_ENABLE, LEN_PRO_TORQUE_ENABLE);
 dynamixel::GroupSyncWrite groupSyncWriteGoalPos(portHandler, packetHandler, ADDR_PRO_GOAL_POSITION, LEN_PRO_GOAL_POSITION);
 dynamixel::GroupSyncWrite groupSyncWrite_GP_A_V_LED(portHandler, packetHandler, ADDR_PRO_INDIRECTDATA_FOR_WRITE_GP_A_V_LED, LEN_PRO_INDIRECTDATA_FOR_WRITE_GP_A_V_LED);
+dynamixel::GroupSyncWrite groupSyncWrite_RGB_LED(portHandler, packetHandler,ADDR_PRO_INDIRECTDATA_FOR_WRITE_RGB_LED, LEN_PRO_INDIRECTDATA_FOR_WRITE_RGB_LED);
 
 // Initialize GroupSyncRead instances
 dynamixel::GroupSyncRead groupSyncRead_PP_MV(portHandler, packetHandler, ADDR_PRO_INDIRECTDATA_FOR_READ_PP_MV, LEN_PRO_INDIRECTDATA_FOR_READ_PP_MV);
@@ -179,7 +184,7 @@ void setup() {
 
     // I.a.3 Ping Dynamixels
     Serial.println("[   MASTER:  ]  Pinging Dynamixels");
-    return_function_state = dxl.pingDynamixels(dxl_id, sizeof(dxl_id) , packetHandler, portHandler);
+    return_function_state = dxl.pingDynamixels(dxl_id, sizeof(dxl_id) , groupSyncWrite_RGB_LED,  packetHandler, portHandler);
     if(return_function_state == true)
     {
       Serial.println("SUCCESS");
@@ -188,7 +193,7 @@ void setup() {
     {
       Serial.println("FAILED");
     }
-
+    
 } // END SETUP
 
 void loop() {
