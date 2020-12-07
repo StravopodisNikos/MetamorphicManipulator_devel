@@ -48,7 +48,7 @@ using namespace ControlTableItem;
  */
 uint8_t dxl_id[] = {DXL1_ID, DXL2_ID, DXL3_ID};
 int id_count;
-int dxl_motors_used = 3;
+const int dxl_motors_used = 3;
 int Nema34_id = STP1_ID;
 
 // Declare extern variables defined in DynamixelProPlusMetamorphicManipulator
@@ -62,6 +62,13 @@ uint8_t   dxl_moving[sizeof(dxl_id)];
 
 //int32_t   dxl_vel_limit[sizeof(dxl_id)];
 //int32_t dxl_accel_limit[sizeof(dxl_id)];
+
+// LED INDICATORS
+unsigned char completed_move_indicator[] = {244, 164, 96};// sandybrown
+unsigned char torque_off_indicator[] = {148, 0, 211};     // dark violet
+unsigned char homing_switch_indicator[] = {255, 140, 0};  // orange
+unsigned char motors_moving_indicator[] = {135, 206, 235};  // skyblue
+unsigned char turn_off_led[] = {0, 0, 0};
 
 int32_t DxlInitPos;                           // Variables used to initialilize DxlTrapzProfParams_forP2P[]
 int32_t DxlGoalPosition;
@@ -102,6 +109,11 @@ const int storage_array_for_PROFILE_STEPS_size = 4;     // This array is for Ste
 unsigned long storage_array_for_PROFILE_STEPS[storage_array_for_PROFILE_STEPS_size];
 
 
+// SYNC WRITE GOAL POSITION
+// Data type is defined in DynamixelProPlusOvidiusShield.h
+sw_data_t sw_data_array[dxl_motors_used]; // this type of array should be passed to the function
+
+
 /*
  * USER SERIAL INPUT VARIABLES
  */
@@ -123,6 +135,8 @@ boolean newData = false;
 int dataNumber = 0;             // new for this version
 bool MENU_EXIT;
 
+bool home_switch_activated = false;
+
 // Create object for handling motors
 Dynamixel2Arduino dxl(DXL_SERIAL, DXL_DIR_PIN);
 DynamixelProPlusOvidiusShield meta_dxl(dxl_id); // Object of custom class to access custom functions for Ovidius manipulator specific 
@@ -137,9 +151,13 @@ void setup() {
   dxl.setPortProtocolVersion(DXL_PROTOCOL_VERSION);
   
   DEBUG_SERIAL.println("[  INFO  ] SETUP START [  SUCCESS ]");
+
+  pinMode(HALL_SWITCH_PIN1, INPUT_PULLUP);  // used for homing test
 }
 
 void loop() {
+  delay(2000);
+  
   // PING DYNAMIXELS
   return_function_state = meta_dxl.pingDynamixels(dxl_id, sizeof(dxl_id),&error_code_received, dxl);
   if (return_function_state){
@@ -163,8 +181,45 @@ void loop() {
     DEBUG_SERIAL.println("[  ERROR  ] TORQUE ON DYNAMIXELS  [  FAILED ]");
   }
 
-  delay(5000);
+  // MOVE MOTORS 1
+  dxl_goal_position[0] = 200000;
+  dxl_goal_position[1] = 50000;
+  dxl_goal_position[2] = 150000;
+  return_function_state = meta_dxl.syncSetDynamixelsGoalPosition(dxl_id, sizeof(dxl_id), dxl_goal_position, sw_data_array,&error_code_received, dxl);
+  if (return_function_state){
+    DEBUG_SERIAL.println("[  INFO  ] SYNC WRITE GOAL POSITION DYNAMIXELS [  SUCCESS ]");
+    DEBUG_SERIAL.print("[  ERROR CODE  ]");DEBUG_SERIAL.println(error_code_received);
+  }
+  else
+  {
+    DEBUG_SERIAL.println("[  ERROR  ]SYNC WRITE GOAL POSITION DYNAMIXELS [  FAILED ]");
+    DEBUG_SERIAL.print("[  ERROR CODE  ]");DEBUG_SERIAL.println(error_code_received);
+  }
 
+  return_function_state = meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), turn_off_led, dxl);
+  return_function_state = meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), completed_move_indicator, dxl);
+  
+  delay(1000);
+
+  // MOVE MOTORS 2
+  dxl_goal_position[0] = 0;
+  dxl_goal_position[1] = 0;
+  dxl_goal_position[2] = 0;
+  return_function_state = meta_dxl.syncSetDynamixelsGoalPosition(dxl_id, sizeof(dxl_id), dxl_goal_position, sw_data_array,&error_code_received, dxl);
+  if (return_function_state){
+    DEBUG_SERIAL.println("[  INFO  ] SYNC WRITE GOAL POSITION DYNAMIXELS [  SUCCESS ]");
+    DEBUG_SERIAL.print("[  ERROR CODE  ]");DEBUG_SERIAL.println(error_code_received);
+  }
+  else
+  {
+    DEBUG_SERIAL.println("[  ERROR  ]SYNC WRITE GOAL POSITION DYNAMIXELS [  FAILED ]");
+    DEBUG_SERIAL.print("[  ERROR CODE  ]");DEBUG_SERIAL.println(error_code_received);
+  }
+  return_function_state = meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), turn_off_led, dxl);
+  return_function_state = meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), completed_move_indicator, dxl);
+  
+  delay(1000);
+  
   //SET TORQUE OFF
   return_function_state = meta_dxl.setDynamixelsTorqueOFF(dxl_id, sizeof(dxl_id), dxl);
   if (return_function_state){
@@ -174,5 +229,21 @@ void loop() {
   {
     DEBUG_SERIAL.println("[  ERROR  ] TORQUE ON DYNAMIXELS  [  FAILED ]");
   }
+  return_function_state = meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), turn_off_led, dxl);
+  return_function_state = meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), torque_off_indicator, dxl);
+  delay(1000);
+
+  home_switch_activated = digitalRead(HALL_SWITCH_PIN1);
+  if (home_switch_activated)
+  {
+      return_function_state = meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), turn_off_led, dxl);
+      return_function_state = meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), homing_switch_indicator, dxl);
+  }
+  else
+  {
+      return_function_state = meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), turn_off_led, dxl);
+      return_function_state = meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), motors_moving_indicator, dxl);
+  }
+  
   
 }
