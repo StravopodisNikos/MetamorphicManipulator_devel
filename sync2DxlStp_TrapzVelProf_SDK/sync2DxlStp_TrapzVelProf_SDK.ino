@@ -11,7 +11,7 @@
 
 // Used Libraries
 #include <DynamixelSDK.h>
-#include <AccelStepper.h>
+//#include <AccelStepper.h>
 #include <DynamixelWorkbench.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -108,7 +108,7 @@ unsigned long prevStepMillis = 0;
 unsigned long millisBetweenSteps = 1; // milliseconds
 
 // Classes Objects definition
-AccelStepper stepper1(motorInterfaceType, stepPin, dirPin);                               // Stepper Motor, it has STP_ID
+//AccelStepper stepper1(motorInterfaceType, stepPin, dirPin);                               // Stepper Motor, it has STP_ID
 //DynamixelWorkbench dxl_wb;                                                              // Dynamixel H54
 
 // PreAllocate Memory for Parameters/Data TxRx
@@ -253,7 +253,7 @@ void setup()
     }
 */    
     // III.b.3 Set Dynamixels Baudrate
-    uint8_t dxl_baudrate_range = 4;                                                                                 // 4 -> 2000000
+    uint8_t dxl_baudrate_range = 3;                                                                                 // 3 -> 1000000
     Serial.println("Setting Dynamixels BAUDRATE");
     return_function_state = syncSetBaudrate(dxl_id, 2, dxl_baudrate_range, groupSyncWrite_BAUDRATE, packetHandler);
     if (return_function_state == true)
@@ -390,7 +390,7 @@ void loop()
 
 
 // InitialStepperCheck
-bool InitialStepperCheck(AccelStepper AccelStepperMotor, uint8_t stp_ID){
+/*bool InitialStepperCheck(AccelStepper AccelStepperMotor, uint8_t stp_ID){
   time_now_micros = micros();
   bool  check_stepper_running = AccelStepperMotor.isRunning();
   if (check_stepper_running == true)
