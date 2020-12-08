@@ -22,7 +22,7 @@
 #include <StepperMotorSettings.h>                   // Includes Stepper Motor/Driver pin StepperMotorSettings
 // Libraries for Robot Motors Driving
 #include "DynamixelProPlusOvidiusShield.h"
-//#include "CustomStepperMetamorphicManipulator.h"
+#include "CustomStepperOvidiusShield.h"
 //  Used Libraries
 #include "Arduino.h"                                // Main Arduino library
 #include <DynamixelShield.h>                        // ROBOTIS library          
@@ -51,7 +51,20 @@ int id_count;
 const int dxl_motors_used = 3;
 int Nema34_id = STP1_ID;
 
-// Declare extern variables defined in DynamixelProPlusMetamorphicManipulator
+/*
+ * Configure Stepper Motor variables defined in CustomStepperOvidiusShield.h
+ */
+bool homingSwitchActivated = true; // NC connection in trigger(despite signed as NO)
+bool limit1SwitchActivated = true; // Green LED is ON at default
+bool limit2SwitchActivated = false;// Green LED is OFF at default
+
+volatile byte currentDirStatus = HIGH;     // Because SW5 is OFF=>DIR=CCW
+unsigned long currentAbsPos;
+int stp_error;
+
+/*
+ * Declare extern variables defined in DynamixelProPlusOvidiusShield.h
+ */
 //bool dxl_addparam_result;                     // crashes serial monitor gamwthnpanagiatou
 uint8_t dxl_error; 
 uint32_t  dxl_present_position[sizeof(dxl_id)];
@@ -63,7 +76,9 @@ uint8_t   dxl_moving[sizeof(dxl_id)];
 //int32_t   dxl_vel_limit[sizeof(dxl_id)];
 //int32_t dxl_accel_limit[sizeof(dxl_id)];
 
-// LED INDICATORS
+/*
+ *  LED INDICATORS
+ */
 unsigned char completed_move_indicator[] = {244, 164, 96};// sandybrown
 unsigned char torque_off_indicator[] = {148, 0, 211};     // dark violet
 unsigned char homing_switch_indicator[] = {255, 140, 0};  // orange
@@ -87,9 +102,7 @@ byte desiredAnatomy[nPseudoJoints];
 // Declare extern variables defined in CustomStepperMetamorphicManipulator
 bool return_function_state = false;
 bool segmentExistsTrapz;
-byte currentDirStatus;
 double currentAbsPos_double;
-unsigned long currentAbsPos;
 double VelocityLimitStp;
 double AccelerationLimitStp;
 double MaxPosLimitStp;
@@ -109,13 +122,13 @@ const int storage_array_for_PROFILE_STEPS_size = 4;     // This array is for Ste
 unsigned long storage_array_for_PROFILE_STEPS[storage_array_for_PROFILE_STEPS_size];
 
 
-// SYNC WRITE GOAL POSITION
-// Data type is defined in DynamixelProPlusOvidiusShield.h
+/* 
+ *  SYNC WRITE structure objects for sending Dynamixel data - Data type are defined in DynamixelProPlusOvidiusShield.h
+ */
 sw_data_t sw_data_array[dxl_motors_used]; // this type of array should be passed to the function
 
-
 /*
- * USER SERIAL INPUT VARIABLES
+ *  USER SERIAL INPUT VARIABLES
  */
 int error_code_received;
 String user_input_string;
@@ -137,22 +150,36 @@ bool MENU_EXIT;
 
 bool home_switch_activated = false;
 
-// Create object for handling motors
+/* 
+ *  Create object for handling motors
+ */
 Dynamixel2Arduino dxl(DXL_SERIAL, DXL_DIR_PIN);
 DynamixelProPlusOvidiusShield meta_dxl(dxl_id); // Object of custom class to access custom functions for Ovidius manipulator specific 
-//CustomStepperMetamorphicManipulator stp(STP1_ID, STEP_Pin, DIR_Pin, ENABLE_Pin, LED_Pin, HALL_SWITCH_PIN1, HALL_SWITCH_PIN2, HALL_SWITCH_PIN3, LOCK_Pin, SPR1, GEAR_FACTOR_PLANETARY, FT_CLOSED_LOOP);
+CustomStepperOvidiusShield stp(STP1_ID, STEP_Pin, DIR_Pin, ENABLE_Pin, HOME_TRIGGER_SWITCH, HALL_SWITCH_PIN2, HALL_SWITCH_PIN3, RED_LED_PIN, GREEN_LED_PIN, BLUE_LED_PIN, SPR1, GEAR_FACTOR_PLANETARY, FT_CLOSED_LOOP);
 
 using namespace ControlTableItem;
 
+/*
+ * SETUP
+ */
 void setup() {
   DEBUG_SERIAL.begin(115200);
   while(!DEBUG_SERIAL);
   dxl.begin(57600);
   dxl.setPortProtocolVersion(DXL_PROTOCOL_VERSION);
+
+  // SETUP STEPPER INTERRUPTS FOR HOMING-LIMIT SWITCHES
+  pinMode(HOME_TRIGGER_SWITCH, INPUT_PULLUP);   // HOME TRIGGER SWITCH
+  pinMode(HALL_SWITCH_PIN2, INPUT);             // LIMIT HALL SENSOR2 
+  pinMode(HALL_SWITCH_PIN3, INPUT);             // LIMIT HALL SENSOR3
+
+  digitalWrite(HALL_SWITCH_PIN2, LOW);
+  digitalWrite(HALL_SWITCH_PIN3, LOW);
+  
+  attachInterrupt(digitalPinToInterrupt(HALL_SWITCH_PIN2), changeStepperDirInterrupt1, RISING);
+  attachInterrupt(digitalPinToInterrupt(HALL_SWITCH_PIN3), changeStepperDirInterrupt2, RISING);
   
   DEBUG_SERIAL.println("[  INFO  ] SETUP START [  SUCCESS ]");
-
-  pinMode(HALL_SWITCH_PIN1, INPUT_PULLUP);  // used for homing test
 }
 
 void loop() {
@@ -232,18 +259,18 @@ void loop() {
   return_function_state = meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), turn_off_led, dxl);
   return_function_state = meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), torque_off_indicator, dxl);
   delay(1000);
+  
+}
 
-  home_switch_activated = digitalRead(HALL_SWITCH_PIN1);
-  if (home_switch_activated)
-  {
-      return_function_state = meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), turn_off_led, dxl);
-      return_function_state = meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), homing_switch_indicator, dxl);
-  }
-  else
-  {
-      return_function_state = meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), turn_off_led, dxl);
-      return_function_state = meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), motors_moving_indicator, dxl);
-  }
-  
-  
+/*
+ *  INTERRUPT FUNCTIONS USED
+ */
+void changeStepperDirInterrupt1()
+{
+  currentDirStatus = !currentDirStatus;
+}
+
+void changeStepperDirInterrupt2()
+{
+  currentDirStatus = !currentDirStatus;
 }
