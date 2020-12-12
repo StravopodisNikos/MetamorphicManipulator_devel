@@ -48,7 +48,7 @@ using namespace ControlTableItem;
  */
 uint8_t dxl_id[] = {DXL1_ID, DXL2_ID, DXL3_ID};
 int id_count;
-const int dxl_motors_used = 3;
+const int dxl_motors_used = DXL_MOTORS;
 int Nema34_id = STP1_ID;
 
 /*
@@ -58,17 +58,19 @@ bool homingSwitchActivated = true; // NC connection in trigger(despite signed as
 bool limit1SwitchActivated = true; // Green LED is ON at default
 bool limit2SwitchActivated = false;// Green LED is OFF at default
 
-volatile byte currentDirStatus = HIGH;     // Because SW5 is OFF=>DIR=CCW
-unsigned long currentAbsPos;
+//enum ROT_DIR{CW, CCW};
+volatile byte currentDirStatus = CCW;     // Because SW5 is OFF=>DIR=CCW == DIR=HIGH
+uint32_t currentAbsPos;
 int stp_error;
+volatile bool KILL_MOTION = false;
 
 /*
  * Declare extern variables defined in DynamixelProPlusOvidiusShield.h
  */
 //bool dxl_addparam_result;                     // crashes serial monitor gamwthnpanagiatou
 uint8_t dxl_error; 
-uint32_t  dxl_present_position[sizeof(dxl_id)];
-uint32_t  dxl_goal_position[sizeof(dxl_id)];
+int32_t  dxl_present_position[sizeof(dxl_id)];
+int32_t  dxl_goal_position[sizeof(dxl_id)];
 int32_t   dxl_prof_vel[sizeof(dxl_id)];
 int32_t   dxl_prof_accel[sizeof(dxl_id)];
 uint8_t   dxl_moving[sizeof(dxl_id)];
@@ -84,12 +86,6 @@ unsigned char torque_off_indicator[] = {148, 0, 211};     // dark violet
 unsigned char homing_switch_indicator[] = {255, 140, 0};  // orange
 unsigned char motors_moving_indicator[] = {135, 206, 235};  // skyblue
 unsigned char turn_off_led[] = {0, 0, 0};
-
-int32_t DxlInitPos;                           // Variables used to initialilize DxlTrapzProfParams_forP2P[]
-int32_t DxlGoalPosition;
-int32_t DxlVmax;
-int32_t DxlAmax;
-const int TrapzProfParams_size = 4;           // Also applied to StpTrapzProfParams
 
 /*
  * Configure Stepper/Dynamixel settings
@@ -125,7 +121,10 @@ unsigned long storage_array_for_PROFILE_STEPS[storage_array_for_PROFILE_STEPS_si
 /* 
  *  SYNC WRITE structure objects for sending Dynamixel data - Data type are defined in DynamixelProPlusOvidiusShield.h
  */
-sw_data_t sw_data_array[dxl_motors_used]; // this type of array should be passed to the function
+sw_data_t_gp sw_data_array_gp[dxl_motors_used]; // this type of array should be passed to the function
+sw_data_t_pv sw_data_array_pv[dxl_motors_used]; // this type of array should be passed to the function
+sw_data_t_pa sw_data_array_pa[dxl_motors_used]; // this type of array should be passed to the function
+
 
 /*
  *  USER SERIAL INPUT VARIABLES
@@ -178,11 +177,176 @@ void setup() {
   
   attachInterrupt(digitalPinToInterrupt(HALL_SWITCH_PIN2), changeStepperDirInterrupt1, RISING);
   attachInterrupt(digitalPinToInterrupt(HALL_SWITCH_PIN3), changeStepperDirInterrupt2, RISING);
-  
+
+  delay(10000);
   DEBUG_SERIAL.println("[  INFO  ] SETUP START [  SUCCESS ]");
+
+  // PING DYNAMIXELS
+  return_function_state = meta_dxl.pingDynamixels(dxl_id, sizeof(dxl_id),&error_code_received, dxl);
+  if (return_function_state){
+    DEBUG_SERIAL.println("[  INFO  ] PING DYNAMIXELS [  SUCCESS ]");
+    DEBUG_SERIAL.print("[  ERROR CODE  ]");DEBUG_SERIAL.println(error_code_received);
+  }
+  else
+  {
+    DEBUG_SERIAL.println("[  ERROR  ] PING DYNAMIXELS [  FAILED ]");
+    DEBUG_SERIAL.print("[  ERROR CODE  ]");DEBUG_SERIAL.println(error_code_received);
+  }
+
+    // HOME stepper
+    /*
+  DEBUG_SERIAL.println("[  INFO  ] HOMING STEPPER MOTOR... ");
+  delay(2000);
+  currentAbsPos = 55000; //random
+  DEBUG_SERIAL.print("NOT HOMED CURRENT POSITION[STEP]: "); DEBUG_SERIAL.println(currentAbsPos);
+  DEBUG_SERIAL.print("NOT HOMED CURRENT DIRECTION: "); DEBUG_SERIAL.println(currentDirStatus);
+  stp_error = 4;
+  stp.setStepperHomePositionSlow(&currentAbsPos, &currentAbsPos_double, &currentDirStatus, &KILL_MOTION, &stp_error);
+  DEBUG_SERIAL.print("HOMING FINISHED NEW POSITION[STEP]: "); DEBUG_SERIAL.println(currentAbsPos);
+  DEBUG_SERIAL.print("HOMING FINISHED NEW DIRECTION: "); DEBUG_SERIAL.println(currentDirStatus);
+  DEBUG_SERIAL.print("HOMING FINISHED STP ERROR CODE: "); DEBUG_SERIAL.println(stp_error);
+  DEBUG_SERIAL.print("HOMING FINISHED KILL MOTION VALUE: "); DEBUG_SERIAL.println(KILL_MOTION);
+  delay(2000);
+
+  // SAVE EEPROM
+  VelocityLimitStp = 10.0;     // [rad/sec]
+  AccelerationLimitStp = 100.0; // [rad/sec^2]
+  MaxPosLimitStp = 2.618;      // [rad] =~150 deg
+  stp.save_STP_EEPROM_settings(&currentDirStatus, &currentAbsPos_double, &VelocityLimitStp, &AccelerationLimitStp, &MaxPosLimitStp);
+  DEBUG_SERIAL.print("[  INFO  ] STEPPER SAVED EEPROM  [  SUCCESS ]");
+  delay(2000);
+  */
+  // SYNC WRITE DXL+STP
+    //SET TORQUE ON
+  return_function_state = meta_dxl.setDynamixelsTorqueON(dxl_id, sizeof(dxl_id), dxl);
+  if (return_function_state){
+    DEBUG_SERIAL.println("[  INFO  ] TORQUE ON DYNAMIXELS [  SUCCESS ]");
+  }
+  else
+  {
+    DEBUG_SERIAL.println("[  ERROR  ] TORQUE ON DYNAMIXELS  [  FAILED ]");
+  }
+
+  // SYNC MOVE MOTORS 1
+  // GIVE P2P PROPERTIES
+  // 1.STEPPER PRE SETTING TO COMPUTE Texec,Ta
+  currentAbsPos_double = 0;
+  double goalAbsPos_double = -0.6;  // just change sign for each pair of points defined in l.260-264
+  double Vexec;
+  double Aexec;
+  double Texec = 1.5;
+  double Taccel;
+  uint32_t RELATIVE_STEPS_2_MOVE = 111;
+  stp_error = 4;
+  bool LIN_SEG_EXISTS;
+  uint32_t P2P_PROF_STEPS[4];
+  return_function_state =  stp.syncPreSetStepperGoalPositionVarStep(&currentAbsPos_double, &goalAbsPos_double, &Vexec, &Aexec, &Texec, &Taccel, &currentDirStatus, &LIN_SEG_EXISTS, P2P_PROF_STEPS,  &stp_error);
+  if (return_function_state)
+  {
+    DEBUG_SERIAL.println("[  INFO  ] PRE SET STEPPER JOINT1 [  SUCCESS ]");
+  }
+  else
+  {
+    DEBUG_SERIAL.println("[  ERROR  ] PRE SET STEPPER JOINT1 [  FAILED ]");
+  }
+  // 2.DYNAMIXELS CALCULATE VEL/ACCEL PROFILE FOR SYNCED MOTION
+  dxl_prof_vel[0] = 100; 
+  dxl_prof_vel[1] = 500;
+  dxl_prof_vel[2] = 200;
+  dxl_prof_accel[0] = 500; 
+  dxl_prof_accel[1] = 500;
+  dxl_prof_accel[2] = 500;
+  // TEST C-SPACE POINTS
+  //double Qdxl_i[] = {0,0,0};
+  //double Qdxl_f[] = {0.3,-0.7,-0.5};
+  
+  double Qdxl_i[] = {0.3,-0.7,-0.5};
+  double Qdxl_f[] = {0,0,0};
+  
+  // convert Delta_Pos matrices to pulses
+  double Qdxl_rel_dpos[3];
+  Qdxl_rel_dpos[0] = Qdxl_f[0] - Qdxl_i[0];
+  Qdxl_rel_dpos[1] = Qdxl_f[1] - Qdxl_i[1];
+  Qdxl_rel_dpos[2] = Qdxl_f[2] - Qdxl_i[2];
+  return_function_state = meta_dxl.calculateProfVelAccel_preassignedVelTexec2(dxl_prof_vel, dxl_prof_accel, Qdxl_rel_dpos, Taccel,Texec,&error_code_received);
+  if (return_function_state)
+  {
+    DEBUG_SERIAL.println("[  INFO  ] PRE SET DYNAMIXELS [  SUCCESS ]");
+    DEBUG_SERIAL.print("[  INFO  ] RECALCULATED PV[0] : "); DEBUG_SERIAL.println(dxl_prof_vel[0]);
+    DEBUG_SERIAL.print("[  INFO  ] RECALCULATED PV[1] : "); DEBUG_SERIAL.println(dxl_prof_vel[1]);
+    DEBUG_SERIAL.print("[  INFO  ] RECALCULATED PV[2] : "); DEBUG_SERIAL.println(dxl_prof_vel[2]);
+    
+    DEBUG_SERIAL.print("[  INFO  ] RECALCULATED PA[0] : "); DEBUG_SERIAL.println(dxl_prof_accel[0]);
+    DEBUG_SERIAL.print("[  INFO  ] RECALCULATED PA[1] : "); DEBUG_SERIAL.println(dxl_prof_accel[1]);
+    DEBUG_SERIAL.print("[  INFO  ] RECALCULATED PA[2] : "); DEBUG_SERIAL.println(dxl_prof_accel[2]);
+  }
+  else
+  {
+    DEBUG_SERIAL.println("[  ERROR  ] PRE SET DYNAMIXELS [  FAILED ]");
+  }
+
+  // 3.DYNAMIXELS SET VEL/ACCEL PROFILE
+  return_function_state = meta_dxl.syncSetDynamixelsProfVel(dxl_id, sizeof(dxl_id), dxl_prof_vel, sw_data_array_pv,&error_code_received, dxl);
+  if (return_function_state){
+    DEBUG_SERIAL.println("[    INFO    ] SYNC WRITE PROFILE VELOCITY DYNAMIXELS  [  SUCCESS ]");
+    DEBUG_SERIAL.print("[  ERROR CODE  ]");DEBUG_SERIAL.println(error_code_received);
+  }
+  else
+  {
+    DEBUG_SERIAL.println("[    ERROR   ] SYNC WRITE PROFILE VELOCITY DYNAMIXELS [  FAILED ]");
+    DEBUG_SERIAL.print("[  ERROR CODE  ]");DEBUG_SERIAL.println(error_code_received);
+  }
+  return_function_state = meta_dxl.syncSetDynamixelsProfAccel(dxl_id, sizeof(dxl_id), dxl_prof_accel, sw_data_array_pa,&error_code_received, dxl);
+  if (return_function_state){
+    DEBUG_SERIAL.println("[    INFO    ] SYNC WRITE PROFILE ACCELERATION DYNAMIXELS  [  SUCCESS ]");
+    DEBUG_SERIAL.print("[  ERROR CODE  ]");DEBUG_SERIAL.println(error_code_received);
+  }
+  else
+  {
+    DEBUG_SERIAL.println("[    ERROR   ] SYNC WRITE PROFILE ACCELERATION DYNAMIXELS [  FAILED ]");
+    DEBUG_SERIAL.print("[  ERROR CODE  ]");DEBUG_SERIAL.println(error_code_received);
+  }
+
+  // 4.DYNAMIXELS SET GOAL POSITION
+  unsigned long motor_movement_start = millis();
+  
+  dxl_goal_position[0] = meta_dxl.convertRadian2DxlPulses(Qdxl_f[0]);
+  dxl_goal_position[1] = meta_dxl.convertRadian2DxlPulses(Qdxl_f[1]);
+  dxl_goal_position[2] = meta_dxl.convertRadian2DxlPulses(Qdxl_f[2]);
+  return_function_state = meta_dxl.syncSetDynamixelsGoalPosition(dxl_id, sizeof(dxl_id), dxl_goal_position, sw_data_array_gp,&error_code_received, dxl);
+  if (return_function_state){
+    DEBUG_SERIAL.println("[    INFO    ] SYNC WRITE GOAL POSITION DYNAMIXELS [  SUCCESS ]");
+    DEBUG_SERIAL.print("[  ERROR CODE  ]");DEBUG_SERIAL.println(error_code_received);
+  }
+  else
+  {
+    DEBUG_SERIAL.println("[    ERROR   ] SYNC WRITE GOAL POSITION DYNAMIXELS [  FAILED ]");
+    DEBUG_SERIAL.print("[  ERROR CODE  ]");DEBUG_SERIAL.println(error_code_received);
+  }
+
+  return_function_state = meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), turn_off_led, dxl);
+  return_function_state = meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), completed_move_indicator, dxl);
+
+  // 5.STEPPER SET GOAL POSITION
+  return_function_state =  stp.syncSetStepperGoalPositionVarStep(&currentAbsPos_double, &goalAbsPos_double, &Aexec, &Texec,  &currentDirStatus, &KILL_MOTION, &LIN_SEG_EXISTS, P2P_PROF_STEPS,   &error_code_received);
+  if (return_function_state){
+    DEBUG_SERIAL.println("[    INFO    ] SYNC WRITE GOAL POSITION STEPPER [  SUCCESS ]");
+    DEBUG_SERIAL.print("[  ERROR CODE  ]");DEBUG_SERIAL.println(error_code_received);
+  }
+  else
+  {
+    DEBUG_SERIAL.println("[    ERROR   ] SYNC WRITE GOAL POSITION STEPPER [  FAILED ]");
+    DEBUG_SERIAL.print("[  ERROR CODE  ]");DEBUG_SERIAL.println(error_code_received);
+  }
+  unsigned long time_duration = millis() - motor_movement_start;                                              // Calculates Stepper Motion Execution Time 
+  double time_duration_double = time_duration / 1000.0;
+  DEBUG_SERIAL.print("[    INFO    ] TOTAL P2P MOTION DURATION  [sec]:"); DEBUG_SERIAL.println(time_duration_double);
+  delay(1000);
 }
 
 void loop() {
+
+  /*
   delay(2000);
   
   // PING DYNAMIXELS
@@ -259,7 +423,8 @@ void loop() {
   return_function_state = meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), turn_off_led, dxl);
   return_function_state = meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), torque_off_indicator, dxl);
   delay(1000);
-  
+
+  */
 }
 
 /*
@@ -268,9 +433,11 @@ void loop() {
 void changeStepperDirInterrupt1()
 {
   currentDirStatus = !currentDirStatus;
+  KILL_MOTION = true;
 }
 
 void changeStepperDirInterrupt2()
 {
   currentDirStatus = !currentDirStatus;
+  KILL_MOTION = true;
 }
