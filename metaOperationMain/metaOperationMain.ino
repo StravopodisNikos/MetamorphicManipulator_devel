@@ -395,23 +395,44 @@ void loop() {
       for (size_t i = 0; i < nDoF; i++)
       {
         DEBUG_SERIAL.print(" [ JOINT "); DEBUG_SERIAL.print(i+1); DEBUG_SERIAL.print(" ] "); DEBUG_SERIAL.println(p2p_list[p2p_index][i],4);
+
+        desiredConfiguration[i] = p2p_list[p2p_index][i];
       }
       
       
       // II.3 SIMPE P2P EXECUTION FUNCTION TO BE PLACED HERE!
-      double p2pcsp_Texec = 3;
-      p2pcsp(currentConfiguration, p2p_list[p2p_index], p2pcsp_Texec);
+      double p2pcsp_Texec = p2p_dur[p2p_index];
+      p2pcsp(currentConfiguration, desiredConfiguration, p2pcsp_Texec);
       
       DEBUG_SERIAL.print(" [ INFO ] "); DEBUG_SERIAL.println("P2P EXECUTED");
       
-      // set flags
-      END_P2PCSP    = true;
-      END_TRAJCSP   = false;
-      END_HOME      = false;
-      END_FORCE     = false;
-      END_ACCEL     = false;
+      /*
+       * FINISH p2pcsp
+       */
+      DEBUG_SERIAL.println(F("[ INFO ] EXIT <p2pcsp>?"));
+      DEBUG_SERIAL.parseInt();
+      while (DEBUG_SERIAL.available() == 0) {};
+      user_input = DEBUG_SERIAL.parseInt();
+      DEBUG_SERIAL.print(F("[ USER INPUT ]")); DEBUG_SERIAL.print("   ->   "); DEBUG_SERIAL.println(user_input);
+      
+      if( user_input == YES_b ) //start->if1
+      {
+        END_P2PCSP    = true;
+        DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("<p2pcsp> FINISHED"));
+      }
+      else
+      {
+        END_P2PCSP    = false;
+        DEBUG_SERIAL.print(" [ INFO ] "); DEBUG_SERIAL.println("<p2pcsp> WILL REPEAT");
+      } 
+
    }//end->wh1
    
+       // set flags
+    END_TRAJCSP   = false;
+    END_HOME      = false;
+    END_FORCE     = false;
+    END_ACCEL     = false;
    }//end->if1
 
   /*

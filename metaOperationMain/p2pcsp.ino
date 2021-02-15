@@ -13,6 +13,18 @@
   // give value to global variables for current/goal joint 1 position
   currentAbsPos_double = q_i[0];
   goalAbsPos_double = q_f[0];
+
+  /*
+   * Torque On Dynamixels.
+   */
+  return_function_state = meta_dxl.setDynamixelsTorqueON(dxl_id, sizeof(dxl_id), dxl);
+  if (return_function_state){
+    DEBUG_SERIAL.println("[  INFO  ] TORQUE ON DYNAMIXELS [  SUCCESS ]");
+  }
+  else
+  {
+    DEBUG_SERIAL.println("[  ERROR  ] TORQUE ON DYNAMIXELS  [  FAILED ]");
+  }
   
   /*
    * Declare local variables for p2p motion.
@@ -36,12 +48,12 @@
   }
   
   // 2.DYNAMIXELS CALCULATE VEL/ACCEL PROFILE FOR SYNCED MOTION
-  dxl_prof_vel[0] = 100; 
-  dxl_prof_vel[1] = 500;
-  dxl_prof_vel[2] = 200;
-  dxl_prof_accel[0] = 500; 
-  dxl_prof_accel[1] = 500;
-  dxl_prof_accel[2] = 500;
+  dxl_prof_vel[0] = 1000; 
+  dxl_prof_vel[1] = 1000;
+  dxl_prof_vel[2] = 1000;
+  dxl_prof_accel[0] = 1000; 
+  dxl_prof_accel[1] = 1000;
+  dxl_prof_accel[2] = 1000;
 
   // convert Delta_Pos matrices to pulses
   double Qdxl_rel_dpos[sizeof(dxl_id)];
@@ -56,7 +68,7 @@
   Qdxl_rel_dpos[0] = Qdxl_f[0] - Qdxl_i[0];
   Qdxl_rel_dpos[1] = Qdxl_f[1] - Qdxl_i[1];
   Qdxl_rel_dpos[2] = Qdxl_f[2] - Qdxl_i[2];
-  return_function_state = meta_dxl.calculateProfVelAccel_preassignedVelTexec2(dxl_prof_vel, dxl_prof_accel, Qdxl_rel_dpos, Taccel, Texec, &error_code_received);
+  return_function_state = meta_dxl.calculateProfVelAccel_preassignedVelTexec(dxl_prof_vel, dxl_prof_accel, Qdxl_rel_dpos, Taccel, Texec, &error_code_received);
   if (return_function_state)
   {
     DEBUG_SERIAL.println("[  INFO  ] PRE SET DYNAMIXELS [  SUCCESS ]");
@@ -67,15 +79,17 @@
     DEBUG_SERIAL.print("[  INFO  ] RECALCULATED PA[0] : "); DEBUG_SERIAL.println(dxl_prof_accel[0]);
     DEBUG_SERIAL.print("[  INFO  ] RECALCULATED PA[1] : "); DEBUG_SERIAL.println(dxl_prof_accel[1]);
     DEBUG_SERIAL.print("[  INFO  ] RECALCULATED PA[2] : "); DEBUG_SERIAL.println(dxl_prof_accel[2]);
+    DEBUG_SERIAL.print("[  ERROR CODE  ]");DEBUG_SERIAL.println(error_code_received);
   }
   else
   {
     DEBUG_SERIAL.println("[  ERROR  ] PRE SET DYNAMIXELS [  FAILED ]");
+    DEBUG_SERIAL.print("[  ERROR CODE  ]");DEBUG_SERIAL.println(error_code_received);
   }
 
-  //dxl_prof_vel[0] = 100;
-  //dxl_prof_vel[1] = 100;
-  //dxl_prof_vel[2] = 100;
+  //dxl_prof_vel[0] = 500;
+  //dxl_prof_vel[1] = 500;
+  //dxl_prof_vel[2] = 500;
   
   // 3.DYNAMIXELS SET VEL/ACCEL PROFILE
   return_function_state = meta_dxl.syncSetDynamixelsProfVel(dxl_id, sizeof(dxl_id), dxl_prof_vel, sw_data_array_pv, &error_code_received, dxl);
@@ -89,6 +103,11 @@
     DEBUG_SERIAL.println("[    ERROR   ] SYNC WRITE PROFILE VELOCITY DYNAMIXELS [  FAILED ]");
     DEBUG_SERIAL.print("[  ERROR CODE  ]");DEBUG_SERIAL.println(error_code_received);
   }
+  
+  //dxl_prof_accel[0] = 1000;
+  //dxl_prof_accel[1] = 1000;
+  //dxl_prof_accel[2] = 1000;
+   
   return_function_state = meta_dxl.syncSetDynamixelsProfAccel(dxl_id, sizeof(dxl_id), dxl_prof_accel, sw_data_array_pa,&error_code_received, dxl);
   if (return_function_state){
     DEBUG_SERIAL.println("[    INFO    ] SYNC WRITE PROFILE ACCELERATION DYNAMIXELS  [  SUCCESS ]");
@@ -121,9 +140,6 @@
     DEBUG_SERIAL.print("[  ERROR CODE  ]");DEBUG_SERIAL.println(error_code_received);
   }
 
-  return_function_state = meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), turn_off_led, dxl);
-  return_function_state = meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), completed_move_indicator, dxl);
-
   // 5.STEPPER SET GOAL POSITION
   return_function_state =  stp.syncSetStepperGoalPositionVarStep(&currentAbsPos_double, &goalAbsPos_double, &Aexec, &Texec,  &currentDirStatus, &KILL_MOTION, &LIN_SEG_EXISTS, P2P_PROF_STEPS,   &error_code_received);
   if (return_function_state){
@@ -135,9 +151,21 @@
     DEBUG_SERIAL.println("[    ERROR   ] SYNC WRITE GOAL POSITION STEPPER [  FAILED ]");
     DEBUG_SERIAL.print("[  ERROR CODE  ]");DEBUG_SERIAL.println(error_code_received);
   }
+  
   p2p_duration = millis() - motor_movement_start;                                              // Calculates Stepper Motion Execution Time 
   double p2p_duration_double = p2p_duration / 1000.0;
+  
   DEBUG_SERIAL.print("[    INFO    ] TOTAL P2P MOTION DURATION  [sec]:"); DEBUG_SERIAL.println(p2p_duration_double);
 
+  return_function_state = meta_dxl.setDynamixelsTorqueOFF(dxl_id, sizeof(dxl_id), dxl);
+  if (return_function_state)
+  {
+    DEBUG_SERIAL.println("[  INFO  ] TORQUE OFF DYNAMIXELS [  SUCCESS ]");
+  }
+  else
+  {
+    DEBUG_SERIAL.println("[  ERROR  ] TORQUE OFF DYNAMIXELS  [  FAILED ]");
+  }
+  
   return;
 } // END FUNCTION
