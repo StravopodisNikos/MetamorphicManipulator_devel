@@ -146,9 +146,9 @@ uint8_t  dxl_moving[sizeof(dxl_id)];
 double currentConfiguration[nDoF];
 double desiredConfiguration[nDoF];
 double p2pcsp_joint_velocities[nDoF];
-double joint_velocities_limits[] = {1, 1.5, 1.5, 1.5};     // [rad/sec] must be implemented in EEPROM Stepper+Dxl!
+double joint_velocities_limits[] = {1, 1.57, 1.57, 1.57};     // [rad/sec] must be implemented in EEPROM Stepper+Dxl!
 double p2pcsp_joint_accelerations[nDoF];
-double joint_accelerations_limits[] = {2, 20, 20, 20};  // [rad/sec^2] must be implemented in EEPROM Stepper+Dxl!
+double joint_accelerations_limits[] = {20, 87, 87, 87};       // [rad/sec^2] must be implemented in EEPROM Stepper+Dxl!
 double p2pcsp_Texec;
 double p2pcsp_Ta;
 //dxlVelLimit dxl_vel_limit = {2000, 1500, 2000};
@@ -198,9 +198,9 @@ CustomStepperOvidiusShield stp(STP1_ID, STEP_Pin, DIR_Pin, ENABLE_Pin, HOME_TRIG
 void setup() {
   // User can select which functions to be executed and finally accept "finish seup"(enter "Y") and proceed to main loop() execution
   
-  DEBUG_SERIAL.begin(SERIAL_BAUDRATE);
+  DEBUG_SERIAL.begin(SERIAL_BAUDRATE);            // Serial BAUDRATE->57600
   while(!DEBUG_SERIAL);
-  dxl.begin(DXL_BAUDRATE);
+  dxl.begin(DXL_BAUDRATE2);                       // UART BAUDRATE->1000000
   dxl.setPortProtocolVersion(DXL_PROTOCOL_VERSION);
 
   // IF OPENCR USED ->

@@ -48,7 +48,7 @@
       DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);
     }
 
-    delay(3000); // wait for Dynamixels to HOME
+    delay(5000); // wait for Dynamixels to HOME
     
     // 2.3 LED INDICATOR
     return_function_state = meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), turn_off_led, dxl);
