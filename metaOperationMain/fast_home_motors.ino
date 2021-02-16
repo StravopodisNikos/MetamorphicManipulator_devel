@@ -1,30 +1,30 @@
   void fast_home_motors()
   {
     // 1.HOME stepper 
-    DEBUG_SERIAL.println("[  INFO  ] HOMING STEPPER MOTOR... ");
+    DEBUG_SERIAL.println(F("[  INFO  ] HOMING STEPPER MOTOR... "));
 
     return_function_state = stp.setStepperHomePositionFast(&currentAbsPos_double, &currentDirStatus, &KILL_MOTION, &stp_error);
     if (return_function_state){
-    DEBUG_SERIAL.println("[    INFO    ] FAST HOMING STEPPER MOTOR [  SUCCESS ]");
-    DEBUG_SERIAL.print("[  ERROR CODE  ]");DEBUG_SERIAL.println(error_code_received);
+    DEBUG_SERIAL.println(F("[    INFO    ] FAST HOMING STEPPER MOTOR [  SUCCESS ]"));
+    DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);
     }
     else
     {
-      DEBUG_SERIAL.println("[    ERROR   ] FAST HOMING STEPPER MOTOR [  FAILED ]");
-      DEBUG_SERIAL.print("[  ERROR CODE  ]");DEBUG_SERIAL.println(error_code_received);
+      DEBUG_SERIAL.println(F("[    ERROR   ] FAST HOMING STEPPER MOTOR [  FAILED ]"));
+      DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);
     }
 
     // 2.HOME DYNAMIXELS
-    DEBUG_SERIAL.println("[  INFO  ] HOMING DYNAMIXEL MOTORS... ");
+    DEBUG_SERIAL.println(F("[  INFO  ] HOMING DYNAMIXEL MOTORS... "));
 
     // 2.1 Torque ON Dynamixels
     return_function_state = meta_dxl.setDynamixelsTorqueON(dxl_id, sizeof(dxl_id), dxl);
     if (return_function_state){
-      DEBUG_SERIAL.println("[  INFO  ] TORQUE ON DYNAMIXELS [  SUCCESS ]");
+      DEBUG_SERIAL.println(F("[  INFO  ] TORQUE ON DYNAMIXELS [  SUCCESS ]"));
     }
     else
     {
-      DEBUG_SERIAL.println("[  ERROR  ] TORQUE ON DYNAMIXELS  [  FAILED ]");
+      DEBUG_SERIAL.println(F("[  ERROR  ] TORQUE ON DYNAMIXELS  [  FAILED ]"));
     }
   
     for(size_t id_count = 0; id_count < sizeof(dxl_id); id_count++){
@@ -34,16 +34,16 @@
     // 2.2 Move Dynamixels
     return_function_state = meta_dxl.syncSetDynamixelsGoalPosition(dxl_id, sizeof(dxl_id), dxl_goal_position, sw_data_array_gp,&error_code_received, dxl);
     if (return_function_state){
-    DEBUG_SERIAL.println("[    INFO    ] SYNC WRITE HOME POSITION DYNAMIXELS [  SUCCESS ]");
-    DEBUG_SERIAL.print("[  ERROR CODE  ]");DEBUG_SERIAL.println(error_code_received);
+    DEBUG_SERIAL.println(F("[    INFO    ] SYNC WRITE HOME POSITION DYNAMIXELS [  SUCCESS ]"));
+    DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);
     }
     else
     {
-      DEBUG_SERIAL.println("[    ERROR   ] SYNC WRITE HOME POSITION DYNAMIXELS [  FAILED ]");
-      DEBUG_SERIAL.print("[  ERROR CODE  ]");DEBUG_SERIAL.println(error_code_received);
+      DEBUG_SERIAL.println(F("[    ERROR   ] SYNC WRITE HOME POSITION DYNAMIXELS [  FAILED ]"));
+      DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);
     }
 
-    delay(2000); // wait for Dynamixels to HOME
+    delay(3000); // wait for Dynamixels to HOME
 
     // 2.3 LED INDICATOR
     return_function_state = meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), turn_off_led, dxl);
@@ -52,11 +52,11 @@
     // 2.4 Torque Off Dynamixels
     return_function_state = meta_dxl.setDynamixelsTorqueOFF(dxl_id, sizeof(dxl_id), dxl);
     if (return_function_state){
-      DEBUG_SERIAL.println("[  INFO  ] TORQUE OFF DYNAMIXELS [  SUCCESS ]");
+      DEBUG_SERIAL.println(F("[  INFO  ] TORQUE OFF DYNAMIXELS [  SUCCESS ]"));
     }
     else
     {
-      DEBUG_SERIAL.println("[  ERROR  ] TORQUE OFF DYNAMIXELS  [  FAILED ]");
+      DEBUG_SERIAL.println(F("[  ERROR  ] TORQUE OFF DYNAMIXELS  [  FAILED ]"));
     }
     
     return;

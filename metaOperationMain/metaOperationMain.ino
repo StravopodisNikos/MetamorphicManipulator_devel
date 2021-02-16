@@ -4,6 +4,8 @@
  *   using custom-made functions for Driving Steppers and Dynamixels of a serial metamorphic
  *   manipulator. 
  *
+ *   In order to successfully compile UNO/MEGA BOARD + DXL SHIELD is recommended. Also custom functions 
+ *   must be added inside Arduino/libraries.(TO BE DONE: CLEAN THE MESS OF LIBRARY FOLDERS)
  *   ********************************************************************************************* 
  */
 
@@ -84,7 +86,7 @@ int error_code_received;
 byte user_input;
 bool MENU_EXIT;
 bool ACCESS_EEPROM;
-
+int p2p_index;
 /*
  * MAIN FLAGS USED TO CONTROL LOOPS
  */
@@ -143,6 +145,12 @@ uint8_t  dxl_moving[sizeof(dxl_id)];
  */
 double currentConfiguration[nDoF];
 double desiredConfiguration[nDoF];
+double p2pcsp_joint_velocities[nDoF];
+double joint_velocities_limits[] = {1, 1.5, 1.5, 1.5};     // [rad/sec] must be implemented in EEPROM Stepper+Dxl!
+double p2pcsp_joint_accelerations[nDoF];
+double joint_accelerations_limits[] = {2, 20, 20, 20};  // [rad/sec^2] must be implemented in EEPROM Stepper+Dxl!
+double p2pcsp_Texec;
+double p2pcsp_Ta;
 //dxlVelLimit dxl_vel_limit = {2000, 1500, 2000};
 //dxlAccelLimit dxl_accel_limit = {900, 900, 900};
 
@@ -182,7 +190,7 @@ Dynamixel2Arduino dxl(DXL_SERIAL, DXL_DIR_PIN);
 DynamixelProPlusOvidiusShield meta_dxl(dxl_id); // Object of custom class to access custom functions for Ovidius manipulator specific 
 CustomStepperOvidiusShield stp(STP1_ID, STEP_Pin, DIR_Pin, ENABLE_Pin, HOME_TRIGGER_SWITCH, HALL_SWITCH_PIN2, HALL_SWITCH_PIN3, RED_LED_PIN, GREEN_LED_PIN, BLUE_LED_PIN, SPR1, GEAR_FACTOR_PLANETARY, FT_CLOSED_LOOP);
 
-using namespace ControlTableItem;
+//using namespace ControlTableItem;
 
 /*
  * SETUP
@@ -222,17 +230,18 @@ void setup() {
   // IF DXL SHIELD USED <-
   
   delay(1000);
-  DEBUG_SERIAL.println(" [ SETUP ] ENTERING OVIDIUS ROBOT SETUP... ");
+  DEBUG_SERIAL.println(F(" [ SETUP ] ENTERING OVIDIUS ROBOT SETUP... "));
   delay(1000);
 
   // SETUP DEFAULT ACTIONS
-  DEBUG_SERIAL.print(" [ SETUP ] "); DEBUG_SERIAL.println("PINGING CONNECTED DYNAMIXELS PRO+");
+  DEBUG_SERIAL.print(F(" [ SETUP ] ")); DEBUG_SERIAL.println(F("PINGING CONNECTED DYNAMIXELS PRO+"));
   ping_motors();
   
-  DEBUG_SERIAL.print(" [ SETUP ] "); DEBUG_SERIAL.println("EXTRACTING GLOBAL VARIABLES FROM EEPROM ");
+  DEBUG_SERIAL.print(F(" [ SETUP ] ")); DEBUG_SERIAL.println(F("EXTRACTING GLOBAL VARIABLES FROM EEPROM "));
   stp.read_STP_EEPROM_settings(&currentDirStatus, &currentAbsPos_double, &VelocityLimitStp, &AccelerationLimitStp, &MaxPosLimitStp); // Initialize global Stepper Variables from EEPROM Memory
-
-  DEBUG_SERIAL.print(" [ SETUP ] "); DEBUG_SERIAL.println("EXTRACTING CURRENT CONFIGURATION");
+  print_stp_eeprom();
+  
+  DEBUG_SERIAL.print(F(" [ SETUP ] ")); DEBUG_SERIAL.println(F("EXTRACTING CURRENT CONFIGURATION"));
   ACCESS_EEPROM = true;
   read_current_configuration(ACCESS_EEPROM);
       
@@ -244,11 +253,11 @@ void setup() {
     /*
      * I. SLOW MOTOR HOMING
      */
-    DEBUG_SERIAL.println("[ SETUP ] HOME MOTORS SLOW?");
+    DEBUG_SERIAL.println(F("[ SETUP ] HOME MOTORS SLOW?"));
     DEBUG_SERIAL.parseInt();
     while (DEBUG_SERIAL.available() == 0) {};
     user_input = DEBUG_SERIAL.parseInt();
-    DEBUG_SERIAL.print("[ USER INPUT ]"); DEBUG_SERIAL.print("   ->   "); DEBUG_SERIAL.println(user_input);
+    DEBUG_SERIAL.print(F("[ USER INPUT ]")); DEBUG_SERIAL.print(F("   ->   ")); DEBUG_SERIAL.println(user_input);
   
     if( user_input == YES_b ) 
     {
@@ -259,48 +268,38 @@ void setup() {
   
     /*
      * II. FAST MOTOR HOMING
-     
-    DEBUG_SERIAL.println("[ SETUP ] HOME MOTORS FAST?");
-    
+     */
+    DEBUG_SERIAL.println(F("[ SETUP ] HOME MOTORS FAST?"));
+    DEBUG_SERIAL.parseInt();
     while (DEBUG_SERIAL.available() == 0) {};
-    user_input_string = DEBUG_SERIAL.readString();
-    DEBUG_SERIAL.print("[ USER INPUT ]"); DEBUG_SERIAL.print("   ->   "); DEBUG_SERIAL.print(user_input_string);
+    user_input = DEBUG_SERIAL.parseInt();
+    DEBUG_SERIAL.print(F("[ USER INPUT ]")); DEBUG_SERIAL.print(F("   ->   ")); DEBUG_SERIAL.print(user_input);
   
-    if( ( strcmp(user_input_string.c_str(),YES)-nl_char_shifting == 0 ) ) 
+    if( user_input == YES_b )  
     {
-      DEBUG_SERIAL.print(" [ INFO ] "); DEBUG_SERIAL.println("FAST HOMING MOTORS");
+      DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("FAST HOMING MOTORS"));
       fast_home_motors();
     }
-*/
+
     /*
-     * III. READ CURRENT CONFIGURATION
-     
-    DEBUG_SERIAL.println("[ SETUP ] READ CURRENT CONFIGURATION?");
-    
-    while (DEBUG_SERIAL.available() == 0) {};
-    user_input_string = DEBUG_SERIAL.readString();
-    DEBUG_SERIAL.print("[ USER INPUT ]"); DEBUG_SERIAL.print("   ->   "); DEBUG_SERIAL.print(user_input_string);
+     * III. 
+     */
+
   
-    if( ( strcmp(user_input_string.c_str(),YES)-nl_char_shifting == 0 ) ) 
-    {
-      DEBUG_SERIAL.print(" [ INFO ] "); DEBUG_SERIAL.println("EXTRACTING CONFIGURATION");
-      ACCESS_EEPROM = false;
-      read_current_configuration(ACCESS_EEPROM);
-    }
- */   
     /*
      * IV. DISPLAY EEPROM
      */
-    //DEBUG_SERIAL.println("[ SETUP ] DISPLAY EEPROM?");
-    
-    //while (DEBUG_SERIAL.available() == 0) {};
-    //user_input_string = DEBUG_SERIAL.readString();
-    //DEBUG_SERIAL.print("[ USER INPUT ]"); DEBUG_SERIAL.print("   ->   "); DEBUG_SERIAL.print(user_input_string);
+    DEBUG_SERIAL.println("[ SETUP ] DISPLAY EEPROM?");
+    DEBUG_SERIAL.parseInt();
+    while (DEBUG_SERIAL.available() == 0) {};
+    user_input = DEBUG_SERIAL.parseInt();
+    DEBUG_SERIAL.print("[ USER INPUT ]"); DEBUG_SERIAL.print("   ->   "); DEBUG_SERIAL.print(user_input);
   
-    //if( ( strcmp(user_input_string.c_str(),YES)-nl_char_shifting == 0 ) ) //start->if1
-    //{
-      //DEBUG_SERIAL.print(" [ INFO ] "); DEBUG_SERIAL.println("EEPROM MEMORY SETTINGS");
-    //}
+    if( user_input == YES_b ) 
+    {
+      DEBUG_SERIAL.print(" [ INFO ] "); DEBUG_SERIAL.println("EEPROM MEMORY SETTINGS");
+      print_stp_eeprom();
+    }
 
     /*
      * V. SETUP EEPROM
@@ -309,13 +308,13 @@ void setup() {
     DEBUG_SERIAL.parseInt();
     while (DEBUG_SERIAL.available() == 0) {};
     user_input = DEBUG_SERIAL.parseInt();
-    DEBUG_SERIAL.print(F("[ USER INPUT ]")); DEBUG_SERIAL.print("   ->   "); DEBUG_SERIAL.println(user_input);
+    DEBUG_SERIAL.print(F("[ USER INPUT ]")); DEBUG_SERIAL.print(F("   ->   ")); DEBUG_SERIAL.println(user_input);
   
     if( user_input == YES_b  ) //start->if1
     {
       DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println("SETTING EEPROM MEMORY");
-      VelocityLimitStp = 10.0;     // [rad/sec]
-      AccelerationLimitStp = 100.0; // [rad/sec^2]
+      VelocityLimitStp = 1.0;     // [rad/sec]
+      AccelerationLimitStp = 2.0; // [rad/sec^2]
       MaxPosLimitStp = 2.618;      // [rad] =~150 deg
       stp.save_STP_EEPROM_settings(&currentDirStatus, &currentAbsPos_double, &VelocityLimitStp, &AccelerationLimitStp, &MaxPosLimitStp);
       DEBUG_SERIAL.println(F("[  INFO  ] STEPPER SAVED EEPROM  [  SUCCESS ]"));
@@ -324,15 +323,15 @@ void setup() {
     /*
      * VI. TEST GRIPPER
      */
-    DEBUG_SERIAL.println(F("[ SETUP ] TEST GRIPPER?"));
+    DEBUG_SERIAL.println(F("[ SETUP ] SETUP GRIPPER?"));
     DEBUG_SERIAL.parseInt();
     while (DEBUG_SERIAL.available() == 0) {};
     user_input = DEBUG_SERIAL.parseInt();
-    DEBUG_SERIAL.print("[ USER INPUT ]"); DEBUG_SERIAL.print("   ->   "); DEBUG_SERIAL.println(user_input);
+    DEBUG_SERIAL.print(F("[ USER INPUT ]")); DEBUG_SERIAL.print(F("   ->   ")); DEBUG_SERIAL.println(user_input);
   
     if( user_input == YES_b ) //start->if1
     {
-      DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("TESTING GRIPPER"));
+      DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("CALIBRATING DEFAULT VOLTAGE(ANALOG)"));
     }
     
     /*
@@ -342,7 +341,7 @@ void setup() {
     DEBUG_SERIAL.parseInt();
     while (DEBUG_SERIAL.available() == 0) {};
     user_input = DEBUG_SERIAL.parseInt();
-    DEBUG_SERIAL.print(F("[ USER INPUT ]")); DEBUG_SERIAL.print("   ->   "); DEBUG_SERIAL.println(user_input);
+    DEBUG_SERIAL.print(F("[ USER INPUT ]")); DEBUG_SERIAL.print(F("   ->   ")); DEBUG_SERIAL.println(user_input);
   
     if( user_input == YES_b ) //start->if1
     {
@@ -351,7 +350,7 @@ void setup() {
     }
     else
     {
-      DEBUG_SERIAL.print(" [ INFO ] "); DEBUG_SERIAL.println("SETUP MENU WILL REPEAT");
+      DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("SETUP MENU WILL REPEAT"));
     }
     
   } // wh1
@@ -369,7 +368,7 @@ void loop() {
   DEBUG_SERIAL.parseInt();
   while (DEBUG_SERIAL.available() == 0) {};
   user_input = DEBUG_SERIAL.parseInt();
-  //DEBUG_SERIAL.print(F("[ USER INPUT ]")); DEBUG_SERIAL.print(F("   ->   ")); DEBUG_SERIAL.print(user_input);
+  DEBUG_SERIAL.print(F("[ USER INPUT ]")); DEBUG_SERIAL.print(F("   ->   ")); DEBUG_SERIAL.print(user_input);
 
   /*
    * II. <p2pcsp>
@@ -386,25 +385,25 @@ void loop() {
       read_current_configuration(ACCESS_EEPROM); 
       
       // II.2 Specify desired configuration
-      DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println("SPECIFY TASK POINT INDEX");
+      DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("SPECIFY TASK POINT INDEX"));
       DEBUG_SERIAL.parseInt();
       while (DEBUG_SERIAL.available() == 0) {};
-      int p2p_index = DEBUG_SERIAL.parseInt();
-      DEBUG_SERIAL.print(F("[ USER INPUT ]")); DEBUG_SERIAL.print("   ->   "); DEBUG_SERIAL.println(p2p_index);
-      DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println("SELECTED CONFIGURATION SPACE POINT:"); 
+      p2p_index = DEBUG_SERIAL.parseInt();
+      DEBUG_SERIAL.print(F("[ USER INPUT ]")); DEBUG_SERIAL.print(F("   ->   ")); DEBUG_SERIAL.println(p2p_index);
+      DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("SELECTED CONFIGURATION SPACE POINT:")); 
       for (size_t i = 0; i < nDoF; i++)
       {
-        DEBUG_SERIAL.print(" [ JOINT "); DEBUG_SERIAL.print(i+1); DEBUG_SERIAL.print(" ] "); DEBUG_SERIAL.println(p2p_list[p2p_index][i],4);
+        DEBUG_SERIAL.print(F(" [ JOINT ")); DEBUG_SERIAL.print(i+1); DEBUG_SERIAL.print(F(" ] ")); DEBUG_SERIAL.println(p2p_list[p2p_index][i],4);
 
         desiredConfiguration[i] = p2p_list[p2p_index][i];
       }
       
       
       // II.3 SIMPE P2P EXECUTION FUNCTION TO BE PLACED HERE!
-      double p2pcsp_Texec = p2p_dur[p2p_index];
-      p2pcsp(currentConfiguration, desiredConfiguration, p2pcsp_Texec);
+      p2pcsp_Texec = p2p_dur[p2p_index];
+      p2pcsp2(currentConfiguration, desiredConfiguration, p2pcsp_Texec);
       
-      DEBUG_SERIAL.print(" [ INFO ] "); DEBUG_SERIAL.println("P2P EXECUTED");
+      DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("P2P EXECUTED"));
       
       /*
        * FINISH p2pcsp
@@ -413,7 +412,7 @@ void loop() {
       DEBUG_SERIAL.parseInt();
       while (DEBUG_SERIAL.available() == 0) {};
       user_input = DEBUG_SERIAL.parseInt();
-      DEBUG_SERIAL.print(F("[ USER INPUT ]")); DEBUG_SERIAL.print("   ->   "); DEBUG_SERIAL.println(user_input);
+      DEBUG_SERIAL.print(F("[ USER INPUT ]")); DEBUG_SERIAL.print(F("   ->   ")); DEBUG_SERIAL.println(user_input);
       
       if( user_input == YES_b ) //start->if1
       {
@@ -423,16 +422,11 @@ void loop() {
       else
       {
         END_P2PCSP    = false;
-        DEBUG_SERIAL.print(" [ INFO ] "); DEBUG_SERIAL.println("<p2pcsp> WILL REPEAT");
+        DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("<p2pcsp> WILL REPEAT"));
       } 
 
    }//end->wh1
    
-       // set flags
-    END_TRAJCSP   = false;
-    END_HOME      = false;
-    END_FORCE     = false;
-    END_ACCEL     = false;
    }//end->if1
 
   /*
@@ -443,17 +437,31 @@ void loop() {
    
    while( (!END_TRAJCSP) ) //start->wh2
    {
-      DEBUG_SERIAL.print(" [ INFO ] "); DEBUG_SERIAL.println("BEGIN CONFIGURATION SPACE TRAJECTORY EXECUTION...");
+      DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("BEGIN CONFIGURATION SPACE TRAJECTORY EXECUTION..."));
 
       // SIMPE TRAJ EXECUTION FUNCTION TO BE PLACED HERE!
-      DEBUG_SERIAL.print(" [ INFO ] "); DEBUG_SERIAL.println("TRAJECTORY EXECUTED");
+      DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("TRAJECTORY EXECUTED"));
       
-      // set flags
-      END_P2PCSP    = false;
-      END_TRAJCSP   = true;
-      END_HOME      = false;
-      END_FORCE     = false;
-      END_ACCEL     = false;
+      /*
+       * FINISH trajcsp
+       */
+      DEBUG_SERIAL.println(F("[ INFO ] EXIT <trajcsp>?"));
+      DEBUG_SERIAL.parseInt();
+      while (DEBUG_SERIAL.available() == 0) {};
+      user_input = DEBUG_SERIAL.parseInt();
+      DEBUG_SERIAL.print(F("[ USER INPUT ]")); DEBUG_SERIAL.print(F("   ->   ")); DEBUG_SERIAL.println(user_input);
+      
+      if( user_input == YES_b ) //start->if1
+      {
+        END_TRAJCSP    = true;
+        DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("<trajcsp> FINISHED"));
+      }
+      else
+      {
+        END_TRAJCSP    = false;
+        DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("<trajcsp> WILL REPEAT"));
+      } 
+
    }//end->wh2
    
    }//end->if2  
@@ -470,8 +478,8 @@ void loop() {
   /*
    *  LOOP TIMING CONTROL
    */
-  time_now_micros = micros();
-  while(micros() < time_now_micros + 500){}
+  //time_now_micros = micros();
+  //while(micros() < time_now_micros + 100){}
   
 }// END LOOP 
 

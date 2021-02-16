@@ -15,12 +15,12 @@ void read_current_configuration(bool access_eeprom)
   // Sync Read Dynamixels Present Position 
   return_function_state = meta_dxl.syncGetDynamixelsPresentPosition(dxl_id, sizeof(dxl_id), dxl_present_position, sr_data_array_pp,&error_code_received, dxl);
   if (return_function_state){
-    DEBUG_SERIAL.println("[    INFO    ] SYNC READ PRESENT POSITION DYNAMIXELS [  SUCCESS ]");
+    DEBUG_SERIAL.println(F("[    INFO    ] SYNC READ PRESENT POSITION DYNAMIXELS [  SUCCESS ]"));
   }
   else
   {
-    DEBUG_SERIAL.println("[    ERROR   ] SYNC READ PRESENT POSITION DYNAMIXELS [  FAILED ]");
-    DEBUG_SERIAL.print("[  ERROR CODE  ]"); DEBUG_SERIAL.println(error_code_received);
+    DEBUG_SERIAL.println(F("[    ERROR   ] SYNC READ PRESENT POSITION DYNAMIXELS [  FAILED ]"));
+    DEBUG_SERIAL.print(F("[  ERROR CODE  ]")); DEBUG_SERIAL.println(error_code_received);
   }
 
   // convert DxlPulses to rad and save to global array
@@ -28,10 +28,10 @@ void read_current_configuration(bool access_eeprom)
   currentConfiguration[2] = meta_dxl.convertDxlPulses2Radian(dxl_present_position[1]);
   currentConfiguration[3] = meta_dxl.convertDxlPulses2Radian(dxl_present_position[2]);
 
-  DEBUG_SERIAL.print(" [ INFO ] "); DEBUG_SERIAL.println("CURRENT ROBOT CONFIGURATION:"); 
+  DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("CURRENT ROBOT CONFIGURATION:")); 
   for (size_t i = 0; i < nDoF; i++)
   {
-    DEBUG_SERIAL.print(" [ JOINT "); DEBUG_SERIAL.print(i+1); DEBUG_SERIAL.print(" ] "); DEBUG_SERIAL.println(currentConfiguration[i],4);
+    DEBUG_SERIAL.print(F(" [ JOINT ")); DEBUG_SERIAL.print(i+1); DEBUG_SERIAL.print(F(" ] ")); DEBUG_SERIAL.println(currentConfiguration[i],4);
   }
       
   return;

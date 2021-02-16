@@ -1,4 +1,4 @@
-  void p2pcsp(double * q_i, double * q_f, double Texec)
+  void p2pcsp2(double * q_i, double * q_f, double Texec)
   {
   /*
    * This function is based on code executed @ metaOperationMainDxlShield for sync move Stp+Dxls.
@@ -13,7 +13,61 @@
   // give value to global variables for current/goal joint 1 position
   currentAbsPos_double = q_i[0];
   goalAbsPos_double = q_f[0];
+  double Vexec;
+  double Aexec;
+  
+  // build the Delta_Pos matrix
+  double Qrel_dpos[4];
+  for (size_t i = 0; i < nDoF; i++)
+  {
+    Qrel_dpos[i] = q_f[i] - q_i[i];
+  }
 
+  p2pcsp_Ta = (1/ACCEL_WIDTH_DENOM) * Texec;
+  /*
+   * First sync motion V,A and new Texec are calculated
+   */
+  return_function_state = meta_dxl.calculateProfVelAccel_preassignedVelTexec3(p2pcsp_joint_velocities, p2pcsp_joint_accelerations, Qrel_dpos, &p2pcsp_Ta, &Texec, joint_velocities_limits, joint_accelerations_limits, &error_code_received);
+  if (return_function_state)
+  {
+    DEBUG_SERIAL.println(F("[  INFO  ] PRE SET STEPPER JOINT1 [  SUCCESS ]"));
+  }
+  else
+  {
+    DEBUG_SERIAL.println(F("[  ERROR  ] PRE SET STEPPER JOINT1 [  FAILED ]"));
+    DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);
+  }
+  /*
+   * Now Stepper Parameters must be transformed to steps/var delay
+   */
+  Vexec = p2pcsp_joint_velocities[0];
+  Aexec = p2pcsp_joint_accelerations[0];
+  //uint32_t RELATIVE_STEPS_2_MOVE;
+  bool LIN_SEG_EXISTS;
+  uint32_t P2P_PROF_STEPS[4];
+  return_function_state =  stp.syncPreSetStepperGoalPositionVarStep2(&currentAbsPos_double, &goalAbsPos_double, &Vexec, &Aexec, &Texec, &p2pcsp_Ta, &currentDirStatus, &LIN_SEG_EXISTS, P2P_PROF_STEPS,  &error_code_received);
+  if (return_function_state)
+  {
+    DEBUG_SERIAL.println(F("[  INFO  ] PRE SET STEPPER JOINT1 [  SUCCESS ]"));
+  }
+  else
+  {
+    DEBUG_SERIAL.println(F("[  ERROR  ] PRE SET STEPPER JOINT1 [  FAILED ]"));
+    DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);
+  }
+
+  /*
+   * Dxl pulses must be converted
+   */
+   for(size_t id_count = 0; id_count < sizeof(dxl_id); id_count++)
+   {
+      dxl_prof_vel[id_count]   = meta_dxl.convertRadPsec2DxlVelUnits(p2pcsp_joint_velocities[id_count+1]);
+      dxl_prof_accel[id_count] = meta_dxl.convertRadPsec2_2_DxlAccelUnits(p2pcsp_joint_accelerations[id_count+1]);
+
+      DEBUG_SERIAL.print(F("[  INFO  ] SETTING DXL PV[")); DEBUG_SERIAL.print(id_count); DEBUG_SERIAL.print(F("] : ")); DEBUG_SERIAL.println(dxl_prof_vel[id_count]);
+      DEBUG_SERIAL.print(F("[  INFO  ] SETTING DXL PA[")); DEBUG_SERIAL.print(id_count); DEBUG_SERIAL.print(F("] : ")); DEBUG_SERIAL.println(dxl_prof_accel[id_count]);
+   }
+   
   /*
    * Torque On Dynamixels.
    */
@@ -25,71 +79,6 @@
   {
     DEBUG_SERIAL.println(F("[  ERROR  ] TORQUE ON DYNAMIXELS  [  FAILED ]"));
   }
-  
-  /*
-   * Declare local variables for p2p motion.
-   */
-  double Vexec;
-  double Aexec;
-  double Taccel; 
-  uint32_t RELATIVE_STEPS_2_MOVE;
-  bool LIN_SEG_EXISTS;
-
-  // 1.STEPPER PRE SETTING TO COMPUTE Texec,Ta
-  uint32_t P2P_PROF_STEPS[4];
-  return_function_state =  stp.syncPreSetStepperGoalPositionVarStep(&currentAbsPos_double, &goalAbsPos_double, &Vexec, &Aexec, &Texec, &Taccel, &currentDirStatus, &LIN_SEG_EXISTS, P2P_PROF_STEPS,  &error_code_received);
-  if (return_function_state)
-  {
-    DEBUG_SERIAL.println(F("[  INFO  ] PRE SET STEPPER JOINT1 [  SUCCESS ]"));
-  }
-  else
-  {
-    DEBUG_SERIAL.println(F("[  ERROR  ] PRE SET STEPPER JOINT1 [  FAILED ]"));
-  }
-  
-  // 2.DYNAMIXELS CALCULATE VEL/ACCEL PROFILE FOR SYNCED MOTION
-  dxl_prof_vel[0] = 1000; 
-  dxl_prof_vel[1] = 1000;
-  dxl_prof_vel[2] = 1000;
-  dxl_prof_accel[0] = 1000; 
-  dxl_prof_accel[1] = 1000;
-  dxl_prof_accel[2] = 1000;
-
-  // convert Delta_Pos matrices to pulses
-  double Qdxl_rel_dpos[sizeof(dxl_id)];
-  double Qdxl_i[sizeof(dxl_id)];
-  double Qdxl_f[sizeof(dxl_id)];
-  Qdxl_f[0] = q_f[1];
-  Qdxl_f[1] = q_f[2];
-  Qdxl_f[2] = q_f[3];
-  Qdxl_i[0] = q_i[1];
-  Qdxl_i[1] = q_i[2];
-  Qdxl_i[2] = q_i[3];
-  Qdxl_rel_dpos[0] = Qdxl_f[0] - Qdxl_i[0];
-  Qdxl_rel_dpos[1] = Qdxl_f[1] - Qdxl_i[1];
-  Qdxl_rel_dpos[2] = Qdxl_f[2] - Qdxl_i[2];
-  return_function_state = meta_dxl.calculateProfVelAccel_preassignedVelTexec(dxl_prof_vel, dxl_prof_accel, Qdxl_rel_dpos, Taccel, Texec, &error_code_received);
-  if (return_function_state)
-  {
-    DEBUG_SERIAL.println(F("[  INFO  ] PRE SET DYNAMIXELS [  SUCCESS ]"));
-    DEBUG_SERIAL.print(F("[  INFO  ] RECALCULATED PV[0] : ")); DEBUG_SERIAL.println(dxl_prof_vel[0]);
-    DEBUG_SERIAL.print(F("[  INFO  ] RECALCULATED PV[1] : ")); DEBUG_SERIAL.println(dxl_prof_vel[1]);
-    DEBUG_SERIAL.print(F("[  INFO  ] RECALCULATED PV[2] : ")); DEBUG_SERIAL.println(dxl_prof_vel[2]);
-    
-    DEBUG_SERIAL.print(F("[  INFO  ] RECALCULATED PA[0] : ")); DEBUG_SERIAL.println(dxl_prof_accel[0]);
-    DEBUG_SERIAL.print(F("[  INFO  ] RECALCULATED PA[1] : ")); DEBUG_SERIAL.println(dxl_prof_accel[1]);
-    DEBUG_SERIAL.print(F("[  INFO  ] RECALCULATED PA[2] : ")); DEBUG_SERIAL.println(dxl_prof_accel[2]);
-    DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);
-  }
-  else
-  {
-    DEBUG_SERIAL.println(F("[  ERROR  ] PRE SET DYNAMIXELS [  FAILED ]"));
-    DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);
-  }
-
-  //dxl_prof_vel[0] = 500;
-  //dxl_prof_vel[1] = 500;
-  //dxl_prof_vel[2] = 500;
   
   // 3.DYNAMIXELS SET VEL/ACCEL PROFILE
   return_function_state = meta_dxl.syncSetDynamixelsProfVel(dxl_id, sizeof(dxl_id), dxl_prof_vel, sw_data_array_pv, &error_code_received, dxl);
@@ -103,10 +92,6 @@
     DEBUG_SERIAL.println(F("[    ERROR   ] SYNC WRITE PROFILE VELOCITY DYNAMIXELS [  FAILED ]"));
     DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);
   }
-  
-  //dxl_prof_accel[0] = 1000;
-  //dxl_prof_accel[1] = 1000;
-  //dxl_prof_accel[2] = 1000;
    
   return_function_state = meta_dxl.syncSetDynamixelsProfAccel(dxl_id, sizeof(dxl_id), dxl_prof_accel, sw_data_array_pa,&error_code_received, dxl);
   if (return_function_state){
@@ -120,15 +105,19 @@
   }
 
   // 4.DYNAMIXELS SET GOAL POSITION
+  //dxl_goal_position[0] = meta_dxl.convertRadian2DxlPulses(q_f[1]);
+  //dxl_goal_position[1] = meta_dxl.convertRadian2DxlPulses(q_f[2]);
+  //dxl_goal_position[2] = meta_dxl.convertRadian2DxlPulses(q_f[3]);
+  //DEBUG_SERIAL.print(F("[  INFO  ] SETTING DXL GP[0] : ")); DEBUG_SERIAL.println(dxl_goal_position[0]);
+  //DEBUG_SERIAL.print(F("[  INFO  ] SETTING DXL GP[1] : ")); DEBUG_SERIAL.println(dxl_goal_position[1]);
+  //DEBUG_SERIAL.print(F("[  INFO  ] SETTING DXL GP[2] : ")); DEBUG_SERIAL.println(dxl_goal_position[2]);
+  for(size_t id_count = 0; id_count < sizeof(dxl_id); id_count++)
+  {
+    dxl_goal_position[id_count] = meta_dxl.convertRadian2DxlPulses(q_f[id_count+1]);
+    DEBUG_SERIAL.print(F("[  INFO  ] SETTING DXL GP[")); DEBUG_SERIAL.print(id_count); DEBUG_SERIAL.print(F("] : ")); DEBUG_SERIAL.println(dxl_goal_position[id_count]);
+  }
+  
   unsigned long motor_movement_start = millis();
-  
-  dxl_goal_position[0] = meta_dxl.convertRadian2DxlPulses(Qdxl_f[0]);
-  dxl_goal_position[1] = meta_dxl.convertRadian2DxlPulses(Qdxl_f[1]);
-  dxl_goal_position[2] = meta_dxl.convertRadian2DxlPulses(Qdxl_f[2]);
-  DEBUG_SERIAL.print(F("[  INFO  ] SETTING DXL GP[0] : ")); DEBUG_SERIAL.println(dxl_goal_position[0]);
-  DEBUG_SERIAL.print(F("[  INFO  ] SETTING DXL GP[1] : ")); DEBUG_SERIAL.println(dxl_goal_position[1]);
-  DEBUG_SERIAL.print(F("[  INFO  ] SETTING DXL GP[2] : ")); DEBUG_SERIAL.println(dxl_goal_position[2]);
-  
   return_function_state = meta_dxl.syncSetDynamixelsGoalPosition(dxl_id, sizeof(dxl_id), dxl_goal_position, sw_data_array_gp,&error_code_received, dxl);
   if (return_function_state){
     DEBUG_SERIAL.println(F("[    INFO    ] SYNC WRITE GOAL POSITION DYNAMIXELS [  SUCCESS ]"));
