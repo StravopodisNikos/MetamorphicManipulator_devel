@@ -1,4 +1,3 @@
-
 /*   *********************************************************************************************
  *   Executes tests for Metamorphic Manipulator with 1 Nema34 Stepper + 3 Dynamixels
  *   using custom-made functions for Driving Steppers and Dynamixels of a serial metamorphic
