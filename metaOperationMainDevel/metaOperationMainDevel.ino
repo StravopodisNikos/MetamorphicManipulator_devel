@@ -18,22 +18,21 @@
 /*
  * INCLUDE LIBRARIES
  */
-#include <definitions.h>                              // Includes definitions of control table variables addresses/data lengths/ communication/ protocols
-#include <motorIDs.h>                                 // Includes motor IDs as set using Dynamixel Wizard
-#include <contolTableItems_LimitValues.h>             // Limit values for control table controlTableItems_LimitValues
-#include <StepperMotorSettings.h>                     // Includes Stepper Motor/Driver pin StepperMotorSettings
-#include <task_definitions.h>                         // Includes task points for execution
-#include <led_indicators.h>
-//#include <ovidius_robot_controller_eeprom_addresses.h>  // Header file for all eeprom addresses used!
-#include <avr/pgmspace.h>
-
-// Libraries for Robot Motors Driving
+ // Core Libraries for Robot Motors Driving
 #include "DynamixelProPlusOvidiusShield.h"
 #include "CustomStepperOvidiusShield.h"
 //  Used Libraries
 #include "Arduino.h"                                // Main Arduino library
 #include <Dynamixel2Arduino.h>
-
+// Auxiliary Libraries
+#include <definitions.h>                              // Includes definitions of control table variables addresses/data lengths/ communication/ protocols
+#include <motorIDs.h>                                 // Includes motor IDs as set using Dynamixel Wizard
+#include <contolTableItems_LimitValues.h>             // Limit values for control table controlTableItems_LimitValues
+#include <utility/StepperMotorSettings.h>             // Includes Stepper Motor/Driver pin StepperMotorSettings
+#include <task_definitions.h>                         // Includes task points for execution
+#include <led_indicators.h>
+//#include <ovidius_robot_controller_eeprom_addresses.h>  // Header file for all eeprom addresses used!
+#include <avr/pgmspace.h>
 #include "OvidiusSensors.h"
 #include <utility/OvidiusSensors_config.h>
 
@@ -136,6 +135,7 @@ volatile bool KILL_MOTION = false;
  */
 uint8_t  dxl_error; 
 int32_t  dxl_present_position[sizeof(dxl_id)];
+int32_t  dxl_present_velocity[sizeof(dxl_id)];
 int32_t  dxl_goal_position[sizeof(dxl_id)];
 int32_t  dxl_prof_vel[sizeof(dxl_id)];
 int32_t  dxl_prof_accel[sizeof(dxl_id)];
@@ -191,14 +191,20 @@ sw_data_t_pa sw_data_array_pa[DXL_MOTORS]; // this type of array should be passe
  *  SYNC READ structure objects for receiving Dynamixel data - Data type are defined in DynamixelProPlusOvidiusShield.h
  */
 sr_data_t_pp sr_data_array_pp[DXL_MOTORS]; // this type of array should be passed to the function
+sr_data_t_pv sr_data_array_pv[DXL_MOTORS]; // this type of array should be passed to the function
+
+/*
+ *  Create struct objects for communicating between CustomStepper+DynamixelOvidius libraries
+ */
+DXL_PP_PACKET dxl_pp_packet, *PTR_2_dxl_pp_packet;
+DXL_PV_PACKET dxl_pv_packet, *PTR_2_dxl_pv_packet; 
 
 /* 
  *  Create object for handling motors
  */
 Dynamixel2Arduino dxl(DXL_SERIAL, DXL_DIR_PIN);
-DynamixelProPlusOvidiusShield meta_dxl(dxl_id); // Object of custom class to access custom functions for Ovidius manipulator specific 
+DynamixelProPlusOvidiusShield meta_dxl(dxl_id), *PTR_2_meta_dxl; // Object of custom class to access custom functions for Ovidius manipulator specific 
 CustomStepperOvidiusShield stp(STP1_ID, STEP_Pin, DIR_Pin, ENABLE_Pin, HOME_TRIGGER_SWITCH, HALL_SWITCH_PIN2, HALL_SWITCH_PIN3, RED_LED_PIN, GREEN_LED_PIN, BLUE_LED_PIN, SPR1, GEAR_FACTOR_PLANETARY, FT_CLOSED_LOOP);
-
 
 /* 
  *  Create object for handling sensors+tools
@@ -208,7 +214,7 @@ Servo OvidiusGripperServo, *ptr2OvidiusGripperServo;
 HX711 ForceSensorHX711[3];
 
 // Force Sensor Globals
-debug_error_type force_error;
+debug_error_type sensor_error;
 // Gripper Tool Globals
 int offset_analog_reading;                          // Returned from setupGripper(), can be executed at setup
 unsigned long grasp_force_limit_newton = MIN_GRASP_FORCE; // Max value is 10[N], must be saved at EEPROM
@@ -222,6 +228,20 @@ sensors::force3axis ForceSensor[num_FORCE_SENSORS] = {
     sensors::force3axis(DOUT_PIN_Y, SCK_PIN_Y),   //ForceSensor[1] -> ForceSensorY
     sensors::force3axis(DOUT_PIN_Z, SCK_PIN_Z),   //ForceSensor[2] -> ForceSensorZ
 };
+
+/*
+ * ADAFRUIT IMU sensor 
+ */
+sensors::imu9dof SingleIMUSensor(GYRO_RANGE_250DPS, ACCEL_RANGE_2G, FILTER_UPDATE_RATE_HZ, 0x0021002C, 0x8700A, 0x8700B), *IMUSensor;
+Adafruit_FXAS21002C gyro;
+Adafruit_FXOS8700 accelmag;
+Adafruit_Madgwick filter;  // added 2/3/21 - original adafruit
+//SF fusion;           // removed 2/3/21 - will implement original adafruit class
+Adafruit_Sensor_Calibration_EEPROM adafr_calibr;  
+sensors_event_t gyro_event, accel_event, magnet_event;
+float pitch, roll, yaw;
+sensors::imu_packet IMU_DATA_PKG, *PTR_2_imu_packet;
+sensors::imu_sensor_states ImuCurrentState;
 
 /*
  * SETUP
@@ -271,6 +291,10 @@ void setup() {
   DEBUG_SERIAL.print(F(" [ SETUP ] ")); DEBUG_SERIAL.println(F("EXTRACTING GLOBAL VARIABLES FROM EEPROM "));
   stp.read_STP_EEPROM_settings(&currentDirStatus, &currentAbsPos_double, &VelocityLimitStp, &AccelerationLimitStp, &MaxPosLimitStp); // Initialize global Stepper Variables from EEPROM Memory
   print_stp_eeprom();
+
+  // initialize data packets for libraries communication
+  DEBUG_SERIAL.print(F(" [ SETUP ] ")); DEBUG_SERIAL.println(F("BUILDING DATA PACKETS FOR LIBRARIES DATA EXCHANGE"));
+  setup_libraries_packets();
   
   DEBUG_SERIAL.print(F(" [ SETUP ] ")); DEBUG_SERIAL.println(F("EXTRACTING CURRENT CONFIGURATION"));
   ACCESS_EEPROM = true;
@@ -511,11 +535,20 @@ void loop() {
     END_ACCEL     = false;
       
   /*
-   *  LOOP TIMING CONTROL
+   *  SAVE EEPROM AFTER MAIN OPERATION
    */
-  //time_now_micros = micros();
-  //while(micros() < time_now_micros + 100){}
+   /* UNDER DEVEL - MUST DRAW DRAFT SKETCH FOR CURRENT ABS POS!
+    DEBUG_SERIAL.println(F("[ LOOP ] SAVE CHANGES TO EEPROM?"));
+    DEBUG_SERIAL.parseInt();
+    while (DEBUG_SERIAL.available() == 0) {};
+    user_input = DEBUG_SERIAL.parseInt();
+    DEBUG_SERIAL.print(F("[ USER INPUT ]")); DEBUG_SERIAL.print(F("   ->   ")); DEBUG_SERIAL.println(user_input);
   
+    if( user_input == YES_b  ) //start->if1
+    {
+      loop_ovidius_eeprom();      
+    }
+   */
 }// END LOOP 
 
 /*

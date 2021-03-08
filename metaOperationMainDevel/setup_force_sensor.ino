@@ -17,7 +17,7 @@ void setup_force_sensor()
  bool pinged_all_sensors = true;
  for (size_t i = 0; i < num_FORCE_SENSORS; i++)
  {
-  return_function_state = ForceSensor[i].setupForceSensor((ForceSensorHX711+i), manual_calibration_scale_factors[i] , &ForceCurrentState, &force_error);
+  return_function_state = ForceSensor[i].setupForceSensor((ForceSensorHX711+i), manual_calibration_scale_factors[i] , &ForceCurrentState, &sensor_error);
   
   if (!return_function_state)
   {
@@ -27,7 +27,7 @@ void setup_force_sensor()
   {
       DEBUG_SERIAL.print(F("[    INFO    ] SENSOR AXIS ")); DEBUG_SERIAL.print(i); DEBUG_SERIAL.println(F(" PINGED  [ SUCCESS ]"));
   }
-  delay(500);
+  delay(5);
  }
 
  if(pinged_all_sensors)
@@ -37,7 +37,7 @@ void setup_force_sensor()
  else
  {
     DEBUG_SERIAL.println(F("[    INFO    ] 3 AXIS FORCE SENSOR PINGED [ FAILED ]"));
-    DEBUG_SERIAL.print(F("[  ERROR CODE  ]")); DEBUG_SERIAL.println(force_error);
+    DEBUG_SERIAL.print(F("[  ERROR CODE  ]")); DEBUG_SERIAL.println(sensor_error);
  }
 
 /*
@@ -61,7 +61,7 @@ void setup_force_sensor()
  float force_measurements_kgs[num_FORCE_SENSORS];
  for (size_t i = 0; i < num_FORCE_SENSORS; i++)
  {
-    return_function_state = ForceSensor[i].measureForceKilos((ForceSensorHX711+i), (force_measurements_kgs+i), &force_error);
+    return_function_state = ForceSensor[i].measureForceKilos((ForceSensorHX711+i), (force_measurements_kgs+i), &sensor_error);
     if (return_function_state)
     {
       DEBUG_SERIAL.print(F("[    INFO    ] FORCE SENSOR")); DEBUG_SERIAL.print(i); DEBUG_SERIAL.println(F(" MEASURED  [ SUCCESS ]"));
@@ -70,7 +70,7 @@ void setup_force_sensor()
     else
     {
       DEBUG_SERIAL.print(F("[    INFO    ] FORCE SENSOR")); DEBUG_SERIAL.print(i); DEBUG_SERIAL.println(F(" MEASURED  [ FAILED ]"));
-      DEBUG_SERIAL.print(F("[  ERROR CODE  ]")); DEBUG_SERIAL.println(force_error);
+      DEBUG_SERIAL.print(F("[  ERROR CODE  ]")); DEBUG_SERIAL.println(sensor_error);
     }
 }
 
