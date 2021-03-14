@@ -35,6 +35,7 @@
 #include <avr/pgmspace.h>
 #include "OvidiusSensors.h"
 #include <utility/OvidiusSensors_config.h>
+#include <TimeLib.h>
 
 /* 
  *  CONFIGURE DEBUG_SERIAL PORT COMMUNICATION
@@ -42,8 +43,8 @@
 #if defined(ARDUINO_AVR_UNO) // When using DynamixelShield
   #include <SoftwareSerial.h>
   SoftwareSerial soft_serial(7, 8); // DYNAMIXELShield UART RX/TX
-  #define DXL_SERIAL   Serial
-  #define DEBUG_SERIAL soft_serial
+  #define DXL_SERIAL   Serial       
+  #define DEBUG_SERIAL soft_serial  
   const uint8_t DXL_DIR_PIN = 2; // DYNAMIXEL Shield DIR PIN
 #elif defined(ARDUINO_AVR_MEGA2560) // When using DynamixelShield
   #include <SoftwareSerial.h>
@@ -209,25 +210,28 @@ CustomStepperOvidiusShield stp(STP1_ID, STEP_Pin, DIR_Pin, ENABLE_Pin, HOME_TRIG
 /* 
  *  Create object for handling sensors+tools
  */
+tools::dataLogger RobotDataLog;
+debug_error_type data_error;
 Servo OvidiusGripperServo, *ptr2OvidiusGripperServo;
 //HX711 ForceSensorX, *ptr2ForceSensorX;
-HX711 ForceSensorHX711[3];
-
+//HX711 ForceSensorHX711[3];
+HX711 SingleForceSensorHX711, *ForceSensorHX711;
 // Force Sensor Globals
 debug_error_type sensor_error;
 // Gripper Tool Globals
 int offset_analog_reading;                          // Returned from setupGripper(), can be executed at setup
 unsigned long grasp_force_limit_newton = MIN_GRASP_FORCE; // Max value is 10[N], must be saved at EEPROM
-
 tools::gripper_states GripperCurrentState;
 sensors::force_sensor_states ForceCurrentState;
-
 tools::gripper OvidiusGripper(GRIPPER_SERVO_PIN,FSR_ANAL_PIN1);
+sensors::force3axis SingleForceSensor(DOUT_PIN_X, SCK_PIN_X), *ForceSensor;
+// 3axis force sensor was commented out because test uses single sensor
+/*
 sensors::force3axis ForceSensor[num_FORCE_SENSORS] = {
     sensors::force3axis(DOUT_PIN_X, SCK_PIN_X),   //ForceSensor[0] -> ForceSensorX
     sensors::force3axis(DOUT_PIN_Y, SCK_PIN_Y),   //ForceSensor[1] -> ForceSensorY
     sensors::force3axis(DOUT_PIN_Z, SCK_PIN_Z),   //ForceSensor[2] -> ForceSensorZ
-};
+}; */
 
 /*
  * ADAFRUIT IMU sensor 
@@ -414,6 +418,43 @@ void setup() {
     
   } // wh1
 
+  /*
+   *  Set time to enter main loop()
+   
+   setSyncProvider(requestSync);
+   DEBUG_SERIAL.println(F("[ SETUP ] SET ROBOT TIME STARTED - INSERT TIME:"));
+   DEBUG_SERIAL.parseInt();
+   bool TIME_NOT_SET = true;
+   while (TIME_NOT_SET)
+   {
+      if (DEBUG_SERIAL.available())
+      {
+        processSyncMessage();
+        TIME_NOT_SET = false;
+        DEBUG_SERIAL.println(F("[ SETUP ] SET ROBOT TIME FINISHED:"));
+      }      
+   };
+
+  /*
+   * Create Session dir
+   RobotDataLog.setupDataLogger(&data_error);
+   if (data_error == SD_INIT_FAILED)
+   {
+      Serial.println(F("[ SETUP ] SETUP SD CARD FAILED"));
+   }
+   else
+   {
+     if (RobotDataLog.createSessionDir())
+     {
+        Serial.println(F("[ SETUP ] CREATED SESSION DIR SUCCESS"));
+     }
+     else
+     {
+        Serial.println(F("[ SETUP ] CREATED SESSION DIR FAILED"));
+     }
+   }
+   */
+
 } // END SETUP
 
 /*
@@ -460,7 +501,7 @@ void loop() {
       
       // II.3 SIMPE P2P EXECUTION FUNCTION TO BE PLACED HERE!
       p2pcsp_Texec = p2p_dur[p2p_index];
-      p2pcsp2(currentConfiguration, desiredConfiguration, p2pcsp_Texec);
+      p2pcsp2_sm(currentConfiguration, desiredConfiguration, p2pcsp_Texec);
       
       DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("P2P EXECUTED"));
       
@@ -558,4 +599,25 @@ void changeStepperDirInterrupt1()
 {
   currentDirStatus = !currentDirStatus;
   KILL_MOTION = true;
+}
+
+/*
+ * TIMING ARDUINO THROUGH SERIAL PORT
+ */
+ time_t requestSync()
+{
+  DEBUG_SERIAL.write(TIME_REQUEST);  
+  return 0; // the time will be sent later in response to serial mesg
+}
+
+void processSyncMessage() {
+  unsigned long pctime;
+  const unsigned long DEFAULT_TIME = 1357041600; // Jan 1 2013
+
+  if(DEBUG_SERIAL.find(TIME_HEADER)) {
+     pctime = DEBUG_SERIAL.parseInt();
+     if( pctime >= DEFAULT_TIME) { // check the integer is a valid time (greater than Jan 1 2013)
+       setTime(pctime); // Sync Arduino clock to the time received on the serial port
+     }
+  }
 }
