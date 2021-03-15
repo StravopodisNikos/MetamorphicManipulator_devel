@@ -35,6 +35,7 @@
 #include <avr/pgmspace.h>
 #include "OvidiusSensors.h"
 #include <utility/OvidiusSensors_config.h>
+#include <utility/OvidiusSensors_debug.h>
 #include <TimeLib.h>
 
 /* 
@@ -210,9 +211,20 @@ CustomStepperOvidiusShield stp(STP1_ID, STEP_Pin, DIR_Pin, ENABLE_Pin, HOME_TRIG
 /* 
  *  Create object for handling sensors+tools
  */
-tools::dataLogger RobotDataLog;
+ // DataLogging
+tools::dataLogger RobotDataLog, *PTR2RobotDataLog;
 debug_error_type data_error;
+File root,dir, *PTR2ROOT, *ptr2dir;
+File POS_LOG, VEL_LOG,FORCE_LOG;
+File LOGFILES[3]; // 0->pos, 1->vel, 2->force -> this must be initialized @ start of task execution functions(i.e. p2pcsp_sm)
+String LOG_FILES_LOC[3];
+String LOG_FILES_GL[3];
+sensors::sensors_list FORCE_FOLDER = sensors::FORCE_3AXIS;
+sensors::sensors_list POS_FOLDER   = sensors::JOINT_POS;
+sensors::sensors_list VEL_FOLDER   = sensors::JOINT_VEL;
+ // Gripper
 Servo OvidiusGripperServo, *ptr2OvidiusGripperServo;
+ // ForceSensor
 //HX711 ForceSensorX, *ptr2ForceSensorX;
 //HX711 ForceSensorHX711[3];
 HX711 SingleForceSensorHX711, *ForceSensorHX711;
@@ -224,7 +236,11 @@ unsigned long grasp_force_limit_newton = MIN_GRASP_FORCE; // Max value is 10[N],
 tools::gripper_states GripperCurrentState;
 sensors::force_sensor_states ForceCurrentState;
 tools::gripper OvidiusGripper(GRIPPER_SERVO_PIN,FSR_ANAL_PIN1);
-sensors::force3axis SingleForceSensor(DOUT_PIN_X, SCK_PIN_X), *ForceSensor;
+sensors::force3axis SingleForceSensor(DOUT_PIN_Z, SCK_PIN_Z), *ForceSensor;              // ONLY FORCE Z-AXIS! 
+//DataLogging globals
+String SESSION_MAIN_DIR,SESSION_MAIN_DIR_FORCE,SESSION_MAIN_DIR_POS,SESSION_MAIN_DIR_VEL;
+unsigned long data_cnt=0;
+unsigned long TIMESTAMP;
 // 3axis force sensor was commented out because test uses single sensor
 /*
 sensors::force3axis ForceSensor[num_FORCE_SENSORS] = {
@@ -288,6 +304,33 @@ void setup() {
   DEBUG_SERIAL.println(F(" [ SETUP ] ENTERING OVIDIUS ROBOT SETUP... "));
   delay(1000);
 
+  // SETUP TIME CLOCK FOR FOLDER MANAGEMENT OF DATA LOGGING
+  setSyncProvider(requestSync);
+  DEBUG_SERIAL.println(F("[ SETUP ] SET ROBOT TIME STARTED - INSERT TIME:"));
+  DEBUG_SERIAL.parseInt();
+  bool TIME_NOT_SET = true;
+  while (TIME_NOT_SET)
+  {
+    if (DEBUG_SERIAL.available())
+    {
+      processSyncMessage();
+      TIME_NOT_SET = false;
+      DEBUG_SERIAL.println(F("[ SETUP ] SET ROBOT TIME FINISHED"));
+    }      
+  }; 
+
+  // INITIALIZE SD CARD
+  if (!SD.begin(SD_CARD_CS_PIN))
+  {
+     DEBUG_SERIAL.println(F("[ SETUP ] SD INITIALIZATION FAILED"));
+     while (1);
+  }
+  DEBUG_SERIAL.println(F("[ SETUP ] SD INITIALIZATION SUCCESS"));
+
+  // MAKE SESSION DIRECTORIES
+  DEBUG_SERIAL.println(F("[ SETUP ] BUILDING SESSION DIRECTORIES"));
+  //session_mkdir();
+  
   // SETUP DEFAULT ACTIONS
   DEBUG_SERIAL.print(F(" [ SETUP ] ")); DEBUG_SERIAL.println(F("PINGING CONNECTED DYNAMIXELS PRO+"));
   ping_motors();

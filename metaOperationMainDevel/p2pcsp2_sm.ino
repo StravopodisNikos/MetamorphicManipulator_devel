@@ -14,6 +14,15 @@
    * Author N. Stravopodis
    */
   DEBUG_SERIAL.println(F("[  INFO  ] EXECUTING P2PCSP... "));
+
+  // pointer to the dataLogger class object
+  PTR2RobotDataLog = &RobotDataLog;
+
+  // Open files for data logging 
+  // until 15-3-21 only 3 data logs will be used(pos/vel/force)
+  // open the log files for writing. Writing in log will be called inside:
+  // syncSetStepperGoalPositionVarStep2/execute_StpTrapzProfile2 
+  //open_logfiles();
   
   // give value to global variables for current/goal joint 1 position
   currentAbsPos_double = q_i[0];
@@ -134,12 +143,12 @@
   }
 
   // 5.STEPPER SET GOAL POSITION - HERE STATE MACHINE FUNCTION IS IMPLEMENTED!!! [7-3-21]
-  bool update_force_during_exec = false;
+  bool update_force_during_exec = true;
   bool update_imu_during_exec = false;
   float FORCE_MEASUREMENTS[num_FORCE_SENSORS];
   sensors::imu_filter selected_filter = sensors::imu_filter::MAHONY_F;
   PTR_2_meta_dxl = &meta_dxl; PTR_2_dxl_pp_packet = &dxl_pp_packet; PTR_2_dxl_pv_packet = &dxl_pv_packet;
-  return_function_state =  stp.syncSetStepperGoalPositionVarStep2(IMUSensor, PTR_2_imu_packet, selected_filter, ForceSensor, ForceSensorHX711, FORCE_MEASUREMENTS, &sensor_error, &currentAbsPos_double, &goalAbsPos_double, &Aexec, &p2pcsp_Texec,  &currentDirStatus, &KILL_MOTION, &LIN_SEG_EXISTS, update_force_during_exec,update_imu_during_exec,  P2P_PROF_STEPS,  PTR_2_meta_dxl, PTR_2_dxl_pp_packet, PTR_2_dxl_pv_packet,  &error_code_received);
+  return_function_state =  stp.syncSetStepperGoalPositionVarStep2(PTR2RobotDataLog, LOGFILES, IMUSensor, PTR_2_imu_packet, selected_filter, ForceSensor, ForceSensorHX711, FORCE_MEASUREMENTS, &sensor_error, &currentAbsPos_double, &goalAbsPos_double, &Aexec, &p2pcsp_Texec,  &currentDirStatus, &KILL_MOTION, &LIN_SEG_EXISTS, update_force_during_exec,update_imu_during_exec,  P2P_PROF_STEPS,  PTR_2_meta_dxl, PTR_2_dxl_pp_packet, PTR_2_dxl_pv_packet,  &error_code_received);
   if (return_function_state){
     DEBUG_SERIAL.println(F("[    INFO    ] SYNC WRITE GOAL POSITION STEPPER [  SUCCESS ]"));
     DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);

@@ -34,7 +34,7 @@
 #include <utility/OvidiusSensors_debug.h>
 #include <TimeLib.h>
 
-tools::dataLogger RobotDataLog;
+tools::dataLogger RobotDataLog, *PTR2RobotDataLog;
 debug_error_type data_error;
 File root,dir, *PTR2ROOT, *ptr2dir;
 File FORCE_LOG;
@@ -55,7 +55,6 @@ void setup() {
   /*
    *  Set time to enter main loop()
    */
-
    setSyncProvider(requestSync);
    Serial.println(F("[ SETUP ] SET ROBOT TIME STARTED - INSERT TIME:"));
    Serial.parseInt();
@@ -69,11 +68,16 @@ void setup() {
         Serial.println(F("[ SETUP ] SET ROBOT TIME FINISHED"));
       }      
    };
-
   /*
    * Create Session dir
    */
-    
+
+   if (!SD.begin(SD_CARD_CS_PIN)) {
+      Serial.println(F("[ SETUP ] SD INITIALIZATION FAILED!"));
+      while (1);
+   }
+   Serial.println(F("[ SETUP ] SD INITIALIZATION SUCCESS!"));
+/*
    RobotDataLog.setupDataLogger(PTR2ROOT, &data_error);
    if (data_error == SD_INIT_FAILED)
    {
@@ -81,16 +85,20 @@ void setup() {
    }
    else
    {
-     if (RobotDataLog.createSessionDir(SESSION_MAIN_DIR))
-     {
-        Serial.println(F("[ SETUP ] CREATED SESSION DIR SUCCESS"));
-        Serial.print(F("[ INFO  ] SESSION DIR:")); Serial.println(SESSION_MAIN_DIR); 
-     }
-     else
-     {
-        Serial.println(F("[ SETUP ] CREATED SESSION DIR FAILED"));
-     }
+      Serial.println(F("[ SETUP ] SETUP SD CARD SUCCESS"));
    }
+*/
+   
+   if (RobotDataLog.createSessionDir(SESSION_MAIN_DIR))
+   {
+      Serial.println(F("[ SETUP ] CREATED SESSION DIR SUCCESS"));
+      Serial.print(F("[ INFO  ] SESSION DIR:")); Serial.println(SESSION_MAIN_DIR); 
+   }
+   else
+   {
+      Serial.println(F("[ SETUP ] CREATED SESSION DIR FAILED"));
+   }
+   
    
    if(RobotDataLog.createSensorDir(FORCE_FOLDER, SESSION_MAIN_DIR, SESSION_MAIN_DIR_FORCE))
    {
@@ -101,40 +109,30 @@ void setup() {
       Serial.println(F("[ SETUP ] CREATED SESSION FORCE DIR FAILED"));
    }
 
-   String forceZ_log_loc = "forceZ.log";
+   String forceZ_log_loc = "force.log";
    String forceZ_log_gl  = SESSION_MAIN_DIR_FORCE+"/"+forceZ_log_loc;
-   Serial.println(forceZ_log_gl);
 
-   // WORKS UNTIL THIS POINT!
-   /*
-   //RobotDataLog.openFile(&FORCE_LOG, forceZ_log_gl, FILE_WRITE,  &data_error);
-   if (SD.exists("gamw.txt"))
-   {  
-      Serial.println("1");
-      SD.remove("gamw.txt");
-   }
-   else
+   // TRYING TO OPEN FILE HERE
+   FORCE_LOG = SD.open(forceZ_log_gl, FILE_WRITE);
+   if (FORCE_LOG)
    {
-      Serial.println("2");
-   }
-   
-   FORCE_LOG = SD.open("gamw.txt", FILE_WRITE);
-   FORCE_LOG.close();
-   //if (data_error == NO_ERROR)
-   if (SD.exists("gamw.txt"))
-   {
-      Serial.println("3");
       data_cnt++;
       TIMESTAMP = millis();
       RobotDataLog.writeData(data, TIMESTAMP ,data_cnt, &FORCE_LOG, &data_error);
-      Serial.println(F("[ SETUP ] WRITE TO FORCE LOG FILE SUCCESS"));
+      if (data_error == NO_ERROR)
+      {
+        Serial.println(F("[ SETUP ] WRITE TO FORCE LOG FILE SUCCESS"));
+      }
+      else
+      {
+        Serial.println(F("[ SETUP ] WRITE TO FORCE LOG FILE FAILED"));
+      }
    }
    else
    {
-      Serial.println("4");
-      Serial.println(F("[ SETUP ] CREATED FORCE LOG FILE FAILED"));
+      Serial.println(F("[ SETUP ] OPEN FORCE LOG FILE FAILED"));
    }
-*/
+  
 }
 
 void loop() {
