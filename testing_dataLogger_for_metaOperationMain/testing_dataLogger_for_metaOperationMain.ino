@@ -109,6 +109,9 @@ void setup() {
       Serial.println(F("[ SETUP ] CREATED SESSION FORCE DIR FAILED"));
    }
 
+   
+   
+/* // this works but file name must alse have minute digits/added a create-open-write-close sequence [17-3-21]
    String forceZ_log_loc = "force.log";
    String forceZ_log_gl  = SESSION_MAIN_DIR_FORCE+"/"+forceZ_log_loc;
 
@@ -132,7 +135,47 @@ void setup() {
    {
       Serial.println(F("[ SETUP ] OPEN FORCE LOG FILE FAILED"));
    }
+  */
   
+    // create file
+    String forceZ_log = "force.log"; // after creation this will change! Global name will be received!
+    RobotDataLog.createFile( SESSION_MAIN_DIR_FORCE , forceZ_log, &data_error);
+    if (data_error == NO_ERROR)
+    {
+      Serial.println(F("[ SETUP ] CREATE FORCE LOG FILE SUCCESS"));
+    }
+    else
+    {
+      Serial.println(F("[ SETUP ] CREATE FORCE LOG FILE FAILED"));
+    }
+
+    // open file
+    RobotDataLog.openFile(&FORCE_LOG, forceZ_log , FILE_WRITE,  &data_error);
+    if (data_error == NO_ERROR)
+    {
+      Serial.println(F("[ SETUP ] OPEN FORCE LOG FILE SUCCESS"));
+    }
+    else
+    {
+      Serial.println(F("[ SETUP ] OPEN FORCE LOG FILE FAILED"));
+    }
+    
+    // write data 2 file
+    data_cnt++;
+    TIMESTAMP = millis();
+    RobotDataLog.writeData(data, TIMESTAMP ,data_cnt, &FORCE_LOG, &data_error);
+    if (data_error == NO_ERROR)
+    {
+      Serial.println(F("[ SETUP ] WRITE TO FORCE LOG FILE SUCCESS"));
+    }
+    else
+    {
+      Serial.println(F("[ SETUP ] WRITE TO FORCE LOG FILE FAILED"));
+    }
+    
+    // close file
+    RobotDataLog.closeFile(&FORCE_LOG);
+    
 }
 
 void loop() {
