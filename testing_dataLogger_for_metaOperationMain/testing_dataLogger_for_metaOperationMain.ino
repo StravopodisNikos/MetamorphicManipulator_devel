@@ -34,38 +34,68 @@
 #include <utility/OvidiusSensors_debug.h>
 #include <TimeLib.h>
 
+#if defined(ARDUINO_AVR_UNO) // When using DynamixelShield
+  #include <SoftwareSerial.h>
+  SoftwareSerial soft_serial(7, 8); // DYNAMIXELShield UART RX/TX
+  #define DXL_SERIAL   Serial       
+  #define DEBUG_SERIAL soft_serial  
+  const uint8_t DXL_DIR_PIN = 2; // DYNAMIXEL Shield DIR PIN
+#elif defined(ARDUINO_AVR_MEGA2560) // When using DynamixelShield
+  #include <SoftwareSerial.h>
+  SoftwareSerial soft_serial(11, 8); // DYNAMIXELShield UART RX/TX
+  #define DXL_SERIAL   Serial
+  #define DEBUG_SERIAL soft_serial
+  const uint8_t DXL_DIR_PIN = 2; // DYNAMIXEL Shield DIR PIN
+#endif
+ 
 tools::dataLogger RobotDataLog, *PTR2RobotDataLog;
 debug_error_type data_error;
 File root,dir, *PTR2ROOT, *ptr2dir;
 File FORCE_LOG;
 sensors::sensors_list FORCE_FOLDER = sensors::FORCE_3AXIS;
-String SESSION_MAIN_DIR,SESSION_MAIN_DIR_FORCE;
+char SESSION_MAIN_DIR[10];
+char SESSION_MAIN_DIR_FORCE[10];
 unsigned long data_cnt=0;
 unsigned long TIMESTAMP;
 double data = 1.5708;
 
+Dynamixel2Arduino dxl(DXL_SERIAL, DXL_DIR_PIN);
+
 void setup() {
+
+  DEBUG_SERIAL.print(F("STARTING DEBUG PC SERIAL BUS..."));
+  DEBUG_SERIAL.begin(SERIAL_BAUDRATE);            // Serial BAUDRATE->115200
+  while(!DEBUG_SERIAL);
+  DEBUG_SERIAL.println(F("SUCCESS"));
+  
+  DEBUG_SERIAL.print(F("STARTING DYNAMIXEL SERIAL BUS..."));
+  dxl.begin(DXL_BAUDRATE2);                       // UART BAUDRATE->1000000
+  dxl.setPortProtocolVersion(DXL_PROTOCOL_VERSION);
+  DEBUG_SERIAL.println(F("SUCCESS"));
+  
+  /*
   Serial.begin(SERIAL_BAUDRATE);            // Serial BAUDRATE->57600
   while(!Serial);
-
+  */
+  
   delay(1000);
-  Serial.println(F(" [ SETUP ] ENTERING OVIDIUS ROBOT SETUP... "));
+  DEBUG_SERIAL.println(F(" [ SETUP ] ENTERING OVIDIUS ROBOT SETUP... "));
   delay(1000);
 
   /*
    *  Set time to enter main loop()
    */
    setSyncProvider(requestSync);
-   Serial.println(F("[ SETUP ] SET ROBOT TIME STARTED - INSERT TIME:"));
-   Serial.parseInt();
+   DEBUG_SERIAL.println(F("[ SETUP ] SET ROBOT TIME STARTED - INSERT TIME:"));
+   DEBUG_SERIAL.parseInt();
    bool TIME_NOT_SET = true;
    while (TIME_NOT_SET)
    {
-      if (Serial.available())
+      if (DEBUG_SERIAL.available())
       {
         processSyncMessage();
         TIME_NOT_SET = false;
-        Serial.println(F("[ SETUP ] SET ROBOT TIME FINISHED"));
+        DEBUG_SERIAL.println(F("[ SETUP ] SET ROBOT TIME FINISHED"));
       }      
    };
   /*
@@ -73,10 +103,10 @@ void setup() {
    */
 
    if (!SD.begin(SD_CARD_CS_PIN)) {
-      Serial.println(F("[ SETUP ] SD INITIALIZATION FAILED!"));
+      DEBUG_SERIAL.println(F("[ SETUP ] SD INITIALIZATION FAILED!"));
       while (1);
    }
-   Serial.println(F("[ SETUP ] SD INITIALIZATION SUCCESS!"));
+   DEBUG_SERIAL.println(F("[ SETUP ] SD INITIALIZATION SUCCESS!"));
 /*
    RobotDataLog.setupDataLogger(PTR2ROOT, &data_error);
    if (data_error == SD_INIT_FAILED)
@@ -88,25 +118,27 @@ void setup() {
       Serial.println(F("[ SETUP ] SETUP SD CARD SUCCESS"));
    }
 */
-   
+
    if (RobotDataLog.createSessionDir(SESSION_MAIN_DIR))
    {
-      Serial.println(F("[ SETUP ] CREATED SESSION DIR SUCCESS"));
-      Serial.print(F("[ INFO  ] SESSION DIR:")); Serial.println(SESSION_MAIN_DIR); 
+      DEBUG_SERIAL.println(F("[ SETUP ] CREATED SESSION DIR SUCCESS"));
+      DEBUG_SERIAL.print(F("[ INFO  ] SESSION DIR:")); DEBUG_SERIAL.println(SESSION_MAIN_DIR); 
    }
    else
    {
-      Serial.println(F("[ SETUP ] CREATED SESSION DIR FAILED"));
+      DEBUG_SERIAL.println(F("[ SETUP ] CREATED SESSION DIR FAILED"));
    }
    
    
    if(RobotDataLog.createSensorDir(FORCE_FOLDER, SESSION_MAIN_DIR, SESSION_MAIN_DIR_FORCE))
    {
-      Serial.println(F("[ SETUP ] CREATED SESSION FORCE DIR SUCCESS"));
+      DEBUG_SERIAL.println(F("[ SETUP ] CREATED SESSION FORCE DIR SUCCESS"));
+      DEBUG_SERIAL.println(SESSION_MAIN_DIR_FORCE);
    }
    else
    {
-      Serial.println(F("[ SETUP ] CREATED SESSION FORCE DIR FAILED"));
+      DEBUG_SERIAL.println(F("[ SETUP ] CREATED SESSION FORCE DIR FAILED"));
+      DEBUG_SERIAL.println(SESSION_MAIN_DIR_FORCE);
    }
 
    
@@ -138,26 +170,32 @@ void setup() {
   */
   
     // create file
-    String forceZ_log = "force.log"; // after creation this will change! Global name will be received!
-    RobotDataLog.createFile( SESSION_MAIN_DIR_FORCE , forceZ_log, &data_error);
+    char LOG_FILE_TEMP[14];
+    //String forceZ_log = "fc.log"; // after creation this will change! Global name will be received!
+    //RobotDataLog.createFile( SESSION_MAIN_DIR_FORCE , forceZ_log, &data_error);
+    RobotDataLog.createFile(&FORCE_LOG, SESSION_MAIN_DIR_FORCE, LOG_FILE_TEMP, &data_error);
     if (data_error == NO_ERROR)
     {
-      Serial.println(F("[ SETUP ] CREATE FORCE LOG FILE SUCCESS"));
+      DEBUG_SERIAL.println(LOG_FILE_TEMP);
+      DEBUG_SERIAL.println(F("[ SETUP ] CREATE FORCE LOG FILE SUCCESS"));
     }
     else
     {
-      Serial.println(F("[ SETUP ] CREATE FORCE LOG FILE FAILED"));
+      DEBUG_SERIAL.println(F("[ SETUP ] CREATE FORCE LOG FILE FAILED"));
+      DEBUG_SERIAL.println(LOG_FILE_TEMP);
+      DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(data_error);
     }
 
     // open file
-    RobotDataLog.openFile(&FORCE_LOG, forceZ_log , FILE_WRITE,  &data_error);
+    RobotDataLog.openFile(&FORCE_LOG, LOG_FILE_TEMP , FILE_WRITE,  &data_error);
     if (data_error == NO_ERROR)
     {
-      Serial.println(F("[ SETUP ] OPEN FORCE LOG FILE SUCCESS"));
+      DEBUG_SERIAL.println(F("[ SETUP ] OPEN FORCE LOG FILE SUCCESS"));
     }
     else
     {
-      Serial.println(F("[ SETUP ] OPEN FORCE LOG FILE FAILED"));
+      DEBUG_SERIAL.println(F("[ SETUP ] OPEN FORCE LOG FILE FAILED"));
+      DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(data_error);
     }
     
     // write data 2 file
@@ -166,15 +204,16 @@ void setup() {
     RobotDataLog.writeData(data, TIMESTAMP ,data_cnt, &FORCE_LOG, &data_error);
     if (data_error == NO_ERROR)
     {
-      Serial.println(F("[ SETUP ] WRITE TO FORCE LOG FILE SUCCESS"));
+      DEBUG_SERIAL.println(F("[ SETUP ] WRITE TO FORCE LOG FILE SUCCESS"));
     }
     else
     {
-      Serial.println(F("[ SETUP ] WRITE TO FORCE LOG FILE FAILED"));
+      DEBUG_SERIAL.println(F("[ SETUP ] WRITE TO FORCE LOG FILE FAILED"));
+      DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(data_error);
     }
     
     // close file
-    RobotDataLog.closeFile(&FORCE_LOG);
+    RobotDataLog.closeFile(&FORCE_LOG, &data_error);
     
 }
 
@@ -188,7 +227,7 @@ void loop() {
  */
  time_t requestSync()
 {
-  Serial.write(TIME_REQUEST);  
+  DEBUG_SERIAL.write(TIME_REQUEST);  
   return 0; // the time will be sent later in response to serial mesg
 }
 
@@ -196,8 +235,8 @@ void processSyncMessage() {
   unsigned long pctime;
   const unsigned long DEFAULT_TIME = 1357041600; // Jan 1 2013
 
-  if(Serial.find(TIME_HEADER)) {
-     pctime = Serial.parseInt();
+  if(DEBUG_SERIAL.find(TIME_HEADER)) {
+     pctime = DEBUG_SERIAL.parseInt();
      if( pctime >= DEFAULT_TIME) { // check the integer is a valid time (greater than Jan 1 2013)
        setTime(pctime); // Sync Arduino clock to the time received on the serial port
      }

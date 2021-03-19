@@ -6,7 +6,7 @@
     return_function_state = stp.setStepperHomePositionSlow( &currentAbsPos_double, &currentDirStatus, &KILL_MOTION, &stp_error);
     if (return_function_state){
     DEBUG_SERIAL.println(F("[    INFO    ] SLOW HOMING STEPPER MOTOR [  SUCCESS ]"));
-    DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);
+    //DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);
     }
     else
     {
@@ -40,7 +40,7 @@
     return_function_state = meta_dxl.syncSetDynamixelsGoalPosition(dxl_id, sizeof(dxl_id), dxl_goal_position, sw_data_array_gp,&error_code_received, dxl);
     if (return_function_state){
     DEBUG_SERIAL.println(F("[    INFO    ] SYNC WRITE HOME POSITION DYNAMIXELS [  SUCCESS ]"));
-    DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);
+    //DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);
     }
     else
     {

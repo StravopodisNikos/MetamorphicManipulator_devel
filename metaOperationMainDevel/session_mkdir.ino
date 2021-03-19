@@ -6,7 +6,6 @@ void session_mkdir()
    // .ino file that calls robot execution(i.e. p2pcsp2_sm)
 
    // SESSION FOLDER
-   
    if (RobotDataLog.createSessionDir(SESSION_MAIN_DIR))
    {
       DEBUG_SERIAL.println(F("[ SETUP ] CREATED SESSION DIR SUCCESS"));
@@ -15,18 +14,9 @@ void session_mkdir()
    else
    {
       DEBUG_SERIAL.println(F("[ SETUP ] CREATED SESSION DIR FAILED"));
+      DEBUG_SERIAL.print(F("[ INFO  ] SESSION DIR:")); DEBUG_SERIAL.println(SESSION_MAIN_DIR);
    }
    
-   // FORCE SUBFOLDER
-   if(RobotDataLog.createSensorDir(FORCE_FOLDER, SESSION_MAIN_DIR, SESSION_MAIN_DIR_FORCE))
-   {
-      DEBUG_SERIAL.println(F("[ SETUP ] CREATED SESSION FORCE DIR SUCCESS"));
-   }
-   else
-   {
-      DEBUG_SERIAL.println(F("[ SETUP ] CREATED SESSION FORCE DIR FAILED"));
-   }
-
    // JOINT POSITION SUBFOLDER
    if(RobotDataLog.createSensorDir(POS_FOLDER, SESSION_MAIN_DIR, SESSION_MAIN_DIR_POS))
    {
@@ -46,6 +36,16 @@ void session_mkdir()
    {
       DEBUG_SERIAL.println(F("[ SETUP ] CREATED SESSION VELOCITY DIR FAILED"));
    }   
-      
+   
+   // FORCE SUBFOLDER
+   if(RobotDataLog.createSensorDir(FORCE_FOLDER, SESSION_MAIN_DIR, SESSION_MAIN_DIR_FORCE))
+   {
+      DEBUG_SERIAL.println(F("[ SETUP ] CREATED SESSION FORCE DIR SUCCESS"));
+   }
+   else
+   {
+      DEBUG_SERIAL.println(F("[ SETUP ] CREATED SESSION FORCE DIR FAILED"));
+   }
+   
    return;
 }

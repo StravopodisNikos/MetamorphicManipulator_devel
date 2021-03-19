@@ -15,29 +15,6 @@
  *  January 2021
  */
 
-/*
- * INCLUDE LIBRARIES
- */
- // Core Libraries for Robot Motors Driving
-#include "DynamixelProPlusOvidiusShield.h"
-#include "CustomStepperOvidiusShield.h"
-//  Used Libraries
-#include "Arduino.h"                                // Main Arduino library
-#include <Dynamixel2Arduino.h>
-// Auxiliary Libraries
-#include <definitions.h>                              // Includes definitions of control table variables addresses/data lengths/ communication/ protocols
-#include <motorIDs.h>                                 // Includes motor IDs as set using Dynamixel Wizard
-#include <contolTableItems_LimitValues.h>             // Limit values for control table controlTableItems_LimitValues
-#include <utility/StepperMotorSettings.h>             // Includes Stepper Motor/Driver pin StepperMotorSettings
-#include <task_definitions.h>                         // Includes task points for execution
-#include <led_indicators.h>
-//#include <ovidius_robot_controller_eeprom_addresses.h>  // Header file for all eeprom addresses used!
-#include <avr/pgmspace.h>
-#include "OvidiusSensors.h"
-#include <utility/OvidiusSensors_config.h>
-#include <utility/OvidiusSensors_debug.h>
-#include <TimeLib.h>
-
 /* 
  *  CONFIGURE DEBUG_SERIAL PORT COMMUNICATION
  */
@@ -77,6 +54,29 @@
   const uint8_t DXL_DIR_PIN = 2; // DYNAMIXEL Shield DIR PIN
 #endif
 
+/*
+ * INCLUDE LIBRARIES
+ */
+ // Core Libraries for Robot Motors Driving
+#include "DynamixelProPlusOvidiusShield.h"
+#include "CustomStepperOvidiusShield.h"
+//  Used Libraries
+#include "Arduino.h"                                // Main Arduino library
+#include <Dynamixel2Arduino.h>
+// Auxiliary Libraries
+#include <definitions.h>                              // Includes definitions of control table variables addresses/data lengths/ communication/ protocols
+#include <motorIDs.h>                                 // Includes motor IDs as set using Dynamixel Wizard
+#include <contolTableItems_LimitValues.h>             // Limit values for control table controlTableItems_LimitValues
+#include <utility/StepperMotorSettings.h>             // Includes Stepper Motor/Driver pin StepperMotorSettings
+#include <task_definitions.h>                         // Includes task points for execution
+#include <led_indicators.h>
+//#include <ovidius_robot_controller_eeprom_addresses.h>  // Header file for all eeprom addresses used!
+#include <avr/pgmspace.h>
+//#include "OvidiusSensors.h"
+#include <utility/OvidiusSensors_config.h>
+#include <utility/OvidiusSensors_debug.h>
+#include <TimeLib.h>
+
 /* 
  *  NAMESPACE OF USED CLASSES
  */
@@ -92,11 +92,11 @@ byte p2pcsp_b  = 2;
 byte trajcsp_b = 3;
 byte home_b    = 4;
 // Auxiliary variables for DEBUG_SERIAL inputs
-int error_code_received;
+unsigned char error_code_received;  // previous int
 byte user_input;
 bool MENU_EXIT;
 bool ACCESS_EEPROM;
-int p2p_index;
+unsigned char p2p_index;
 /*
  * MAIN FLAGS USED TO CONTROL LOOPS
  */
@@ -108,11 +108,11 @@ bool END_ACCEL;
 /*
  * SECONDARY FLAGS USED TO CONTROL LOOPS
  */
-bool p2pcspExecution;
-bool trajcspExecution;
-bool homeExecution;
-bool forceExecution;
-bool accelExecution;  
+//bool p2pcspExecution;
+//bool trajcspExecution;
+//bool homeExecution;
+//bool forceExecution;
+//bool accelExecution;  
 
 /*
  * Configure IDs for Dynamixels & NEMA34 Stepper Motor -> MUST align with the IDs configured at EEPROM of each module!
@@ -127,9 +127,8 @@ bool limit1SwitchActivated = true;  // Green LED is OFF at default(THIS WAS GREE
 bool limit2SwitchActivated = false; // Green LED is OFF at default
 
 volatile byte currentDirStatus = CCW;     // Because SW5 is OFF=>DIR=CCW == DIR=HIGH
-//uint32_t currentAbsPos;
 uint32_t RELATIVE_STEPS_2_MOVE;
-int stp_error;
+unsigned char stp_error;
 volatile bool KILL_MOTION = false;
 
 /*
@@ -141,8 +140,7 @@ int32_t  dxl_present_velocity[sizeof(dxl_id)];
 int32_t  dxl_goal_position[sizeof(dxl_id)];
 int32_t  dxl_prof_vel[sizeof(dxl_id)];
 int32_t  dxl_prof_accel[sizeof(dxl_id)];
-uint8_t  dxl_moving[sizeof(dxl_id)];
-
+//uint8_t  dxl_moving[sizeof(dxl_id)];
 //int32_t   dxl_vel_limit[sizeof(dxl_id)];
 //int32_t dxl_accel_limit[sizeof(dxl_id)];
 
@@ -206,7 +204,7 @@ DXL_PV_PACKET dxl_pv_packet, *PTR_2_dxl_pv_packet;
  */
 Dynamixel2Arduino dxl(DXL_SERIAL, DXL_DIR_PIN);
 DynamixelProPlusOvidiusShield meta_dxl(dxl_id), *PTR_2_meta_dxl; // Object of custom class to access custom functions for Ovidius manipulator specific 
-CustomStepperOvidiusShield stp(STP1_ID, STEP_Pin, DIR_Pin, ENABLE_Pin, HOME_TRIGGER_SWITCH, HALL_SWITCH_PIN2, HALL_SWITCH_PIN3, RED_LED_PIN, GREEN_LED_PIN, BLUE_LED_PIN, SPR1, GEAR_FACTOR_PLANETARY, FT_CLOSED_LOOP);
+CustomStepperOvidiusShield stp(STP1_ID, STEP_Pin, DIR_Pin, ENABLE_Pin, HOME_TRIGGER_SWITCH, HALL_SWITCH_PIN2, HALL_SWITCH_PIN3, RED_LED_PIN, GREEN_LED_PIN, BLUE_LED_PIN, SPR_1, GEAR_FACTOR_PLANETARY, FT_CLOSED_LOOP);
 
 /* 
  *  Create object for handling sensors+tools
@@ -217,8 +215,6 @@ debug_error_type data_error;
 File root,dir, *PTR2ROOT, *ptr2dir;
 File POS_LOG, VEL_LOG,FORCE_LOG;
 File LOGFILES[3]; // 0->pos, 1->vel, 2->force -> this must be initialized @ start of task execution functions(i.e. p2pcsp_sm)
-String LOG_FILES_LOC[3];
-String LOG_FILES_GL[3];
 sensors::sensors_list FORCE_FOLDER = sensors::FORCE_3AXIS;
 sensors::sensors_list POS_FOLDER   = sensors::JOINT_POS;
 sensors::sensors_list VEL_FOLDER   = sensors::JOINT_VEL;
@@ -238,7 +234,15 @@ sensors::force_sensor_states ForceCurrentState;
 tools::gripper OvidiusGripper(GRIPPER_SERVO_PIN,FSR_ANAL_PIN1);
 sensors::force3axis SingleForceSensor(DOUT_PIN_Z, SCK_PIN_Z), *ForceSensor;              // ONLY FORCE Z-AXIS! 
 //DataLogging globals
-String SESSION_MAIN_DIR,SESSION_MAIN_DIR_FORCE,SESSION_MAIN_DIR_POS,SESSION_MAIN_DIR_VEL;
+char LOG_FILES[3];
+char SESSION_MAIN_DIR[10];
+//SESSION_MAIN_DIR_FORCE,SESSION_MAIN_DIR_POS,SESSION_MAIN_DIR_VEL -> SESSION_MAIN_DIR_SENSORS
+char SESSION_MAIN_DIR_POS[10];
+char SESSION_MAIN_DIR_VEL[10];
+char SESSION_MAIN_DIR_FORCE[10];
+char LOG_POS[14];
+char LOG_VEL[14];
+char LOG_FORCE[14];
 unsigned long data_cnt=0;
 unsigned long TIMESTAMP;
 // 3axis force sensor was commented out because test uses single sensor
@@ -251,7 +255,7 @@ sensors::force3axis ForceSensor[num_FORCE_SENSORS] = {
 
 /*
  * ADAFRUIT IMU sensor 
- */
+
 sensors::imu9dof SingleIMUSensor(GYRO_RANGE_250DPS, ACCEL_RANGE_2G, FILTER_UPDATE_RATE_HZ, 0x0021002C, 0x8700A, 0x8700B), *IMUSensor;
 Adafruit_FXAS21002C gyro;
 Adafruit_FXOS8700 accelmag;
@@ -263,13 +267,15 @@ float pitch, roll, yaw;
 sensors::imu_packet IMU_DATA_PKG, *PTR_2_imu_packet;
 sensors::imu_sensor_states ImuCurrentState;
 
+ */
+ 
 /*
  * SETUP
  */
 void setup() {
   // User can select which functions to be executed and finally accept "finish seup"(enter "Y") and proceed to main loop() execution
   
-  DEBUG_SERIAL.begin(SERIAL_BAUDRATE);            // Serial BAUDRATE->57600
+  DEBUG_SERIAL.begin(SERIAL_BAUDRATE);            // Serial BAUDRATE->115200
   while(!DEBUG_SERIAL);
   dxl.begin(DXL_BAUDRATE2);                       // UART BAUDRATE->1000000
   dxl.setPortProtocolVersion(DXL_PROTOCOL_VERSION);
@@ -329,26 +335,27 @@ void setup() {
 
   // MAKE SESSION DIRECTORIES
   DEBUG_SERIAL.println(F("[ SETUP ] BUILDING SESSION DIRECTORIES"));
-  //session_mkdir();
+  session_mkdir();
+  create_logfiles(); // THIS WILL BE IMPLEMENTED IN P2PCSP. HERE ONLY FOR DEMO
   
   // SETUP DEFAULT ACTIONS
   DEBUG_SERIAL.print(F(" [ SETUP ] ")); DEBUG_SERIAL.println(F("PINGING CONNECTED DYNAMIXELS PRO+"));
-  ping_motors();
+  //ping_motors();
   
   DEBUG_SERIAL.print(F(" [ SETUP ] ")); DEBUG_SERIAL.println(F("EXTRACTING GLOBAL VARIABLES FROM EEPROM "));
   stp.read_STP_EEPROM_settings(&currentDirStatus, &currentAbsPos_double, &VelocityLimitStp, &AccelerationLimitStp, &MaxPosLimitStp); // Initialize global Stepper Variables from EEPROM Memory
-  print_stp_eeprom();
+  //print_stp_eeprom();
 
   // initialize data packets for libraries communication
   DEBUG_SERIAL.print(F(" [ SETUP ] ")); DEBUG_SERIAL.println(F("BUILDING DATA PACKETS FOR LIBRARIES DATA EXCHANGE"));
-  setup_libraries_packets();
+  //setup_libraries_packets();
   
   DEBUG_SERIAL.print(F(" [ SETUP ] ")); DEBUG_SERIAL.println(F("EXTRACTING CURRENT CONFIGURATION"));
   ACCESS_EEPROM = true;
-  read_current_configuration(ACCESS_EEPROM);
+  //read_current_configuration(ACCESS_EEPROM);
       
   // SETUP USER-SELECTED ACTIONS 
-  bool stop_setup = false; // flag for setup menu robot loop
+  bool stop_setup = true; // flag for setup menu robot loop
 
   while(!stop_setup) //wh1
   {

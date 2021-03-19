@@ -18,11 +18,11 @@
   // pointer to the dataLogger class object
   PTR2RobotDataLog = &RobotDataLog;
 
-  // Open files for data logging 
+  // Create the files for data logging 
   // until 15-3-21 only 3 data logs will be used(pos/vel/force)
-  // open the log files for writing. Writing in log will be called inside:
+  // open/close and write in log will be called inside:
   // syncSetStepperGoalPositionVarStep2/execute_StpTrapzProfile2 
-  //open_logfiles();
+  create_logfiles();
   
   // give value to global variables for current/goal joint 1 position
   currentAbsPos_double = q_i[0];
@@ -98,7 +98,7 @@
   if (return_function_state)
   {
     DEBUG_SERIAL.println(F("[    INFO    ] SYNC WRITE PROFILE VELOCITY DYNAMIXELS  [  SUCCESS ]"));
-    DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);
+    //DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);
   }
   else
   {
@@ -134,7 +134,7 @@
   return_function_state = meta_dxl.syncSetDynamixelsGoalPosition(dxl_id, sizeof(dxl_id), dxl_goal_position, sw_data_array_gp,&error_code_received, dxl);
   if (return_function_state){
     DEBUG_SERIAL.println(F("[    INFO    ] SYNC WRITE GOAL POSITION DYNAMIXELS [  SUCCESS ]"));
-    DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);
+    //DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);
   }
   else
   {
@@ -148,10 +148,11 @@
   float FORCE_MEASUREMENTS[num_FORCE_SENSORS];
   sensors::imu_filter selected_filter = sensors::imu_filter::MAHONY_F;
   PTR_2_meta_dxl = &meta_dxl; PTR_2_dxl_pp_packet = &dxl_pp_packet; PTR_2_dxl_pv_packet = &dxl_pv_packet;
-  return_function_state =  stp.syncSetStepperGoalPositionVarStep2(PTR2RobotDataLog, LOGFILES, IMUSensor, PTR_2_imu_packet, selected_filter, ForceSensor, ForceSensorHX711, FORCE_MEASUREMENTS, &sensor_error, &currentAbsPos_double, &goalAbsPos_double, &Aexec, &p2pcsp_Texec,  &currentDirStatus, &KILL_MOTION, &LIN_SEG_EXISTS, update_force_during_exec,update_imu_during_exec,  P2P_PROF_STEPS,  PTR_2_meta_dxl, PTR_2_dxl_pp_packet, PTR_2_dxl_pv_packet,  &error_code_received);
+  //return_function_state =  stp.syncSetStepperGoalPositionVarStep2(PTR2RobotDataLog, LOGFILES, LOG_FILES, IMUSensor, PTR_2_imu_packet, selected_filter, ForceSensor, ForceSensorHX711, FORCE_MEASUREMENTS, &sensor_error, &currentAbsPos_double, &goalAbsPos_double, &Aexec, &p2pcsp_Texec,  &currentDirStatus, &KILL_MOTION, &LIN_SEG_EXISTS, update_force_during_exec,update_imu_during_exec,  P2P_PROF_STEPS,  PTR_2_meta_dxl, PTR_2_dxl_pp_packet, PTR_2_dxl_pv_packet,  &error_code_received);
+    return_function_state =  stp.syncSetStepperGoalPositionVarStep3(PTR2RobotDataLog, LOGFILES, LOG_FILES, ForceSensor, ForceSensorHX711, FORCE_MEASUREMENTS, &sensor_error, &currentAbsPos_double, &goalAbsPos_double, &Aexec, &p2pcsp_Texec,  &currentDirStatus, &KILL_MOTION, &LIN_SEG_EXISTS, update_force_during_exec,update_imu_during_exec,  P2P_PROF_STEPS,  PTR_2_meta_dxl, PTR_2_dxl_pp_packet, PTR_2_dxl_pv_packet,  &error_code_received);
   if (return_function_state){
     DEBUG_SERIAL.println(F("[    INFO    ] SYNC WRITE GOAL POSITION STEPPER [  SUCCESS ]"));
-    DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);
+    //DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);
   }
   else
   {
