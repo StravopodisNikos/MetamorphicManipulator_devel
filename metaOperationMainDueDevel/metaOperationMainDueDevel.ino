@@ -59,7 +59,7 @@
  */
  // Core Libraries for Robot Motors Driving
 #include "DynamixelProPlusOvidiusShield.h"            // [added in % down]
-#include "CustomStepperOvidiusShield.h"               // [13%   (DXL+STP)]
+#include "CustomStepperOvidiusDueShield.h"            
 //  Used Libraries
 //#include "Arduino.h"                                  // Main Arduino library
 #include <Dynamixel2Arduino.h>
@@ -204,7 +204,7 @@ DXL_PV_PACKET dxl_pv_packet, *PTR_2_dxl_pv_packet;
  */
 Dynamixel2Arduino dxl(DXL_SERIAL, DXL_DIR_PIN);
 DynamixelProPlusOvidiusShield meta_dxl(dxl_id), *PTR_2_meta_dxl; // Object of custom class to access custom functions for Ovidius manipulator specific 
-CustomStepperOvidiusShield stp(STP1_ID, STEP_Pin, DIR_Pin, ENABLE_Pin, HOME_TRIGGER_SWITCH, HALL_SWITCH_PIN2, HALL_SWITCH_PIN3, RED_LED_PIN, GREEN_LED_PIN, BLUE_LED_PIN, SPR_1, GEAR_FACTOR_PLANETARY, FT_CLOSED_LOOP);
+CustomStepperOvidiusDueShield stp(STP1_ID, STEP_Pin, DIR_Pin, ENABLE_Pin, HOME_TRIGGER_SWITCH, HALL_SWITCH_PIN2, HALL_SWITCH_PIN3, RED_LED_PIN, GREEN_LED_PIN, BLUE_LED_PIN, SPR_1, GEAR_FACTOR_PLANETARY, FT_CLOSED_LOOP);
 
 /* 
  *  Create object for handling sensors+tools
@@ -276,9 +276,14 @@ void setup() {
   
   DEBUG_SERIAL.begin(SERIAL_BAUDRATE);            // Serial BAUDRATE->115200
   while(!DEBUG_SERIAL);
+  DEBUG_SERIAL.print(F("STARTING DEBUG PC SERIAL BUS..."));
+  DEBUG_SERIAL.println(F("SUCCESS"));
+
+  DEBUG_SERIAL.print(F("STARTING DYNAMIXEL SERIAL BUS..."));
   dxl.begin(DXL_BAUDRATE2);                       // UART BAUDRATE->1000000
   dxl.setPortProtocolVersion(DXL_PROTOCOL_VERSION);
-
+  DEBUG_SERIAL.println(F("SUCCESS"));
+  
   // IF OPENCR USED ->
   /*
   pinMode(BDPIN_DXL_PWR_EN, OUTPUT);
@@ -342,7 +347,7 @@ void setup() {
   //ping_motors();
   
   DEBUG_SERIAL.print(F(" [ SETUP ] ")); DEBUG_SERIAL.println(F("EXTRACTING GLOBAL VARIABLES FROM EEPROM "));
-  stp.read_STP_EEPROM_settings(&currentDirStatus, &currentAbsPos_double, &VelocityLimitStp, &AccelerationLimitStp, &MaxPosLimitStp); // Initialize global Stepper Variables from EEPROM Memory
+  //stp.read_STP_EEPROM_settings(&currentDirStatus, &currentAbsPos_double, &VelocityLimitStp, &AccelerationLimitStp, &MaxPosLimitStp); // Initialize global Stepper Variables from EEPROM Memory
   //print_stp_eeprom();
 
   // initialize data packets for libraries communication
@@ -415,7 +420,7 @@ void setup() {
   
     if( user_input == YES_b  ) //start->if1
     {
-      setup_ovidius_eeprom();      
+      //setup_ovidius_eeprom();      
     }
     
     /*

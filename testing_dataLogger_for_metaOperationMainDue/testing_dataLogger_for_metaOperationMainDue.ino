@@ -65,11 +65,12 @@ double data = 1.5708;
 
 Dynamixel2Arduino dxl(DXL_SERIAL, DXL_DIR_PIN);
 
-void setup() {
-
-  DEBUG_SERIAL.print(F("STARTING DEBUG PC SERIAL BUS..."));
+void setup() 
+{
+  //DEBUG_SERIAL.print(F("STARTING DEBUG PC SERIAL BUS..."));
   DEBUG_SERIAL.begin(SERIAL_BAUDRATE);            // Serial BAUDRATE->115200
   while(!DEBUG_SERIAL);
+  DEBUG_SERIAL.print(F("STARTING DEBUG PC SERIAL BUS..."));
   DEBUG_SERIAL.println(F("SUCCESS"));
   
   DEBUG_SERIAL.print(F("STARTING DYNAMIXEL SERIAL BUS..."));

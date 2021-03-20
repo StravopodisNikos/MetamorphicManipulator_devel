@@ -7,7 +7,7 @@ void setup_ovidius_eeprom()
   AccelerationLimitStp = joint_accelerations_limits[0]; // [rad/sec^2]
   MaxPosLimitStp = 2.618;      // [rad] =~150 deg
   
-  stp.save_STP_EEPROM_settings(&currentDirStatus, &currentAbsPos_double, &VelocityLimitStp, &AccelerationLimitStp, &MaxPosLimitStp);
+  //stp.save_STP_EEPROM_settings(&currentDirStatus, &currentAbsPos_double, &VelocityLimitStp, &AccelerationLimitStp, &MaxPosLimitStp);
   DEBUG_SERIAL.println(F("[  INFO  ] STEPPER SAVED EEPROM  [  SUCCESS ]"));
 
   // GRIPPER
