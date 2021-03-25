@@ -55,6 +55,26 @@ void session_mkdir()
       DEBUG_SERIAL.print(F("[ SETUP ] FORCE DIR:")); DEBUG_SERIAL.println(SESSION_MAIN_DIR_FORCE);
       DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(data_error);
    }
+
+   // CURREBT SUBFOLDER
+   if(RobotDataLog.createSensorDir(CUR_FOLDER, SESSION_MAIN_DIR, SESSION_MAIN_DIR_CUR,&data_error))
+   {
+      DEBUG_SERIAL.println(F("[ SETUP ] CREATED SESSION CURRENT DIR SUCCESS"));
+      DEBUG_SERIAL.print(F("[ SETUP ] CURRENT DIR:")); DEBUG_SERIAL.println(SESSION_MAIN_DIR_CUR);
+   }
+   else
+   {
+      DEBUG_SERIAL.println(F("[ SETUP ] CREATED SESSION CURRENT DIR FAILED"));
+      DEBUG_SERIAL.print(F("[ SETUP ] CURRENT DIR:")); DEBUG_SERIAL.println(SESSION_MAIN_DIR_CUR);
+      DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(data_error);
+   }
+
+  // set pointers as elements of the global array - each element points to a specific sensor directory
+  PTRS2SENSOR_DIRS[POS_LOG_ID] = SESSION_MAIN_DIR_POS;
+  PTRS2SENSOR_DIRS[VEL_LOG_ID] = SESSION_MAIN_DIR_VEL;
+  PTRS2SENSOR_DIRS[FOR_LOG_ID] = SESSION_MAIN_DIR_FORCE;
+  PTRS2SENSOR_DIRS[CUR_LOG_ID] = SESSION_MAIN_DIR_CUR;
+  // IMU...
    
    return;
 }

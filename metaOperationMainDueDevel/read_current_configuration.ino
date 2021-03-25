@@ -1,16 +1,9 @@
-void read_current_configuration(bool access_eeprom)
+void read_current_configuration()
 {
-
+  // [21-3-21] Modified in order no EEPROM usage! 
+  
   // Read Joint1(Stepper Motor)
-  if(access_eeprom)
-  {
-    //stp.read_STP_EEPROM_settings(&currentDirStatus, &currentAbsPos_double, &VelocityLimitStp, &AccelerationLimitStp, &MaxPosLimitStp);
-    currentConfiguration[0] = currentAbsPos_double;
-  }
-  else
-  {
-    currentConfiguration[0] = currentAbsPos_double;
-  }
+  currentConfiguration[0] = currentAbsPos_double;
 
   // Sync Read Dynamixels Present Position 
   return_function_state = meta_dxl.syncGetDynamixelsPresentPosition(dxl_id, sizeof(dxl_id), dxl_present_position, sr_data_array_pp,&error_code_received, dxl);

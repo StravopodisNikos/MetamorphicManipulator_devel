@@ -1,9 +1,10 @@
 /*   *********************************************************************************************
- *   Executes tests for Metamorphic Manipulator with 1 Nema34 Stepper + 3 Dynamixels
- *   using custom-made functions for Driving Steppers and Dynamixels of a serial metamorphic
- *   manipulator. 
- *
- *   In order to successfully compile DUE BOARD + DXL SHIELD is MANDATORY.
+ *   After upgrading to DUE from MEGA board the sensors must be rechecked!!!
+ *   -Gripper -> what is going on with the analog read???
+ *   -Force   ->
+ *   -Current ->
+ *   
+ *   After successful test, this will be integrated in metaOperationMainDueShield.ino
  *   ********************************************************************************************* 
  */
 
@@ -11,7 +12,7 @@
  *  Author: Stravopodis Nikos, PhD Candidate, University of the Aegean
  *  mail: n.stravopodis@syros.aegean.gr
  * 
- *  March 2021
+ *  MArch 2021
  */
 
 /* 
@@ -41,7 +42,7 @@
  */
 // Core Libraries for Robot Motors Driving
 #include "DynamixelProPlusOvidiusShield.h"            
-#include "CustomStepperOvidiusDueShield.h"            // This is the renamed and Due-modified version of the CustomStepperOvidiusShield
+#include "CustomStepperOvidiusDueShield.h"            
 // 3rd party libraries
 #include <Dynamixel2Arduino.h>
 // Auxiliary Libraries
@@ -49,9 +50,8 @@
 #include <motorIDs.h>                                 // Includes motor IDs as set using Dynamixel Wizard
 #include <contolTableItems_LimitValues.h>             // Limit values for control table controlTableItems_LimitValues
 #include <utility/StepperMotorSettings.h>             // Includes Stepper Motor/Driver pin StepperMotorSettings
-#include <utility/stepper_led_indicators.h>             // Includes Stepper Motor/Driver pin StepperMotorSettings
 #include <task_definitions.h>                         // Includes task points for execution
-//#include <led_indicators.h>                           // Led color/blinks for robot monitoring
+#include <led_indicators.h>                           // Led color/blinks for robot monitoring
 #include <utility/OvidiusSensors_config.h>            // Configuration for sensors used in robot
 #include <utility/OvidiusSensors_debug.h>             // Debug codes for sensor functions
 #include <TimeLib.h>                                  // Timing functions
@@ -126,10 +126,8 @@ uint8_t  dxl_moving[sizeof(dxl_id)];
 /*
  * Timing variables 
  */
- int total_time_trying = 0;         // used to count time for opening comm objects. if exceed timeout limit, aborts opening
- bool TIME_NOT_SET     = true;      // used in TimeLib
+ bool TIME_NOT_SET = true;          // used in TimeLib
  unsigned long time_now_micros;     // used for clocking functions
- unsigned long time_now_millis;     // used for clocking functions
  unsigned long p2p_duration;        // used for measuring total task execution
 /*
  * Configure Stepper/Dynamixel settings
@@ -137,7 +135,6 @@ uint8_t  dxl_moving[sizeof(dxl_id)];
 double currentConfiguration[nDoF];
 double desiredConfiguration[nDoF];
 double p2pcsp_joint_velocities[nDoF];
-double p2pcsp_joint_currents[nDoF];
 double joint_velocities_limits[] = {1, 1.57, 1.57, 1.57};     // [rad/sec] must be implemented in EEPROM Stepper+Dxl!
 double p2pcsp_joint_accelerations[nDoF];
 double joint_accelerations_limits[] = {20, 87, 87, 87};       // [rad/sec^2] must be implemented in EEPROM Stepper+Dxl!
@@ -187,14 +184,12 @@ DXL_PC_PACKET  dxl_pc_packet,  *PTR_2_dxl_pc_packet;
  */
 Dynamixel2Arduino dxl(DXL_SERIAL, DXL_DIR_PIN);
 DynamixelProPlusOvidiusShield meta_dxl(dxl_id), *PTR_2_meta_dxl; // Object of custom class to access custom functions for Ovidius manipulator specific 
-CustomStepperOvidiusDueShield stp(STP1_ID, STEP_Pin, DIR_Pin, ENABLE_Pin, HOME_TRIGGER_SWITCH, HALL_SWITCH_PIN2, HALL_SWITCH_PIN3, RED_LED_PIN, GREEN_LED_PIN, BLUE_LED_PIN, SPR_1, GEAR_FACTOR_PLANETARY_TEST, FT_CLOSED_LOOP);
+CustomStepperOvidiusDueShield stp(STP1_ID, STEP_Pin, DIR_Pin, ENABLE_Pin, HOME_TRIGGER_SWITCH, HALL_SWITCH_PIN2, HALL_SWITCH_PIN3, RED_LED_PIN, GREEN_LED_PIN, BLUE_LED_PIN, SPR_1, GEAR_FACTOR_PLANETARY, FT_CLOSED_LOOP);
 
 /* 
  *  Create object for handling sensors+tools
  */
  // DataLogging
-uint32_t DUE_CLOCK_Hz = DUE_CLOCK_Hz_MAX;
-bool SD_INITIALIZED = false;
 tools::dataLogger RobotDataLog, *PTR2RobotDataLog;
 debug_error_type data_error;
 //File root,dir, *PTR2ROOT, *ptr2dir;
@@ -233,7 +228,7 @@ char LOG_FORCE[LOG_FILES_DIR_CHAR_LEN];
 char LOG_CUR[LOG_FILES_DIR_CHAR_LEN];
 char * LOG_FILE_PATH[TOTAL_SENSORS_USED];                           // changes each time create_logfiles() is called(i.e. for each task execution) - must be expanded to nSensors!
 const char * PTRS2SENSOR_DIRS[TOTAL_SENSORS_USED];                  // implemented only once in session_mkdir() - must be expanded to nSensors!
- 
+
 // 3axis force sensor was commented out because test uses single sensor
 /*
 sensors::force3axis ForceSensor[num_FORCE_SENSORS] = {
@@ -245,8 +240,7 @@ sensors::force3axis ForceSensor[num_FORCE_SENSORS] = {
 double joint1_current_measurement;
 sensors::current_packet CUR_DATA_PKG, *PTR_2_CUR_DATA_PKG;
 sensors::currentSensor joint1_cur_sensor, *ptr2joint1_cur_sensor;
-//Adafruit_INA219 ina219, * ptr2ina219; [24-3-21] Will use only ACS712 current module
-
+Adafruit_INA219 ina219, * ptr2ina219;
 /*
  * ADAFRUIT IMU sensor 
 // [21-3-21] was commented out because of memory issues in MEGA BOARD
@@ -265,113 +259,60 @@ sensors::imu_sensor_states ImuCurrentState;
 /*
  * SETUP
  */
-void setup() 
-{
-  DEBUG_SERIAL.begin(SERIAL_BAUDRATE3);            
+void setup() {
+  // User can select which functions to be executed and finally accept "finish seup"(enter "Y") and proceed to main loop() execution
+  
+  DEBUG_SERIAL.begin(SERIAL_BAUDRATE);            // Serial BAUDRATE->115200
   while(!DEBUG_SERIAL);
-  delay(500);
   DEBUG_SERIAL.print(F("STARTING DEBUG PC SERIAL BUS..."));
   DEBUG_SERIAL.println(F("SUCCESS"));
 
-  // INITIALIZE SD CARD
-  unsigned long started_sd_initialization = millis();
-  while ( (!SD_INITIALIZED) && (total_time_trying < SD_INIT_TIMEOUT_MILLIS) )
-  {
-    if (!SD.begin(SD_CARD_CS_PIN))
-    {
-       DEBUG_SERIAL.println(F("[ SETUP ] SD INITIALIZATION FAILED"));
-    }
-    else
-    {
-      SD_INITIALIZED = true;
-      DEBUG_SERIAL.println(F("[ SETUP ] SD INITIALIZATION SUCCESS"));
-    }
-    total_time_trying = millis() - started_sd_initialization;  
-  }
-  
   DEBUG_SERIAL.print(F("STARTING DYNAMIXEL SERIAL BUS..."));
-  dxl.begin(DXL_BAUDRATE2);                       
+  dxl.begin(DXL_BAUDRATE0);                       
   dxl.setPortProtocolVersion(DXL_PROTOCOL_VERSION);
   DEBUG_SERIAL.println(F("SUCCESS"));
   
   // SET TRIGGERS PINMODES
-  pinMode(HOME_TRIGGER_SWITCH, INPUT_PULLUP);           // HOME TRIGGER SWITCH
-  pinMode(HALL_SWITCH_PIN2, INPUT_PULLUP);              // LIMIT HALL SENSOR2 
-  pinMode(HALL_SWITCH_PIN3, INPUT_PULLUP);              // LIMIT HALL SENSOR3
+  pinMode(HOME_TRIGGER_SWITCH, INPUT_PULLUP);   // HOME TRIGGER SWITCH
+  pinMode(HALL_SWITCH_PIN2, INPUT_PULLUP);             // LIMIT HALL SENSOR2 
+  pinMode(HALL_SWITCH_PIN3, INPUT_PULLUP);             // LIMIT HALL SENSOR3
   
   // SET EXTERNAL INTERRUPTS: IF DXL SHIELD USED ->
-  attachInterrupt(digitalPinToInterrupt(HALL_SWITCH_PIN2), changeStepperDirInterrupt1, RISING);
-  attachInterrupt(digitalPinToInterrupt(HALL_SWITCH_PIN3), changeStepperDirInterrupt1, RISING);
+  //attachInterrupt(digitalPinToInterrupt(HALL_SWITCH_PIN2), changeStepperDirInterrupt1, RISING);
+  //attachInterrupt(digitalPinToInterrupt(HALL_SWITCH_PIN3), changeStepperDirInterrupt1, RISING);
   // IF DXL SHIELD USED <-
   
   delay(500);
   DEBUG_SERIAL.println(F(" [ SETUP ] ENTERING OVIDIUS ROBOT SETUP... "));
   delay(500);
 
-  // SETUP TIME CLOCK FOR FOLDER MANAGEMENT OF DATA LOGGING
-  setSyncProvider(requestSync);
-  DEBUG_SERIAL.println(F("[ SETUP ] SET ROBOT TIME STARTED - INSERT TIME:"));
-  DEBUG_SERIAL.parseInt();
-  while (TIME_NOT_SET)
-  {
-    if (DEBUG_SERIAL.available())
-    {
-      processSyncMessage();
-      TIME_NOT_SET = false;
-      DEBUG_SERIAL.println(F("[ SETUP ] SET ROBOT TIME FINISHED"));
-    }      
-  }; 
+  // SETUP TIME CLOCK FOR FOLDER MANAGEMENT OF DATA LOGGING -> REMOVED HERE
 
-
-  
-  // MAKE SESSION DIRECTORIES
-  DEBUG_SERIAL.println(F("[ SETUP ] BUILDING SESSION DIRECTORIES"));
-  session_mkdir();
-  create_logfiles(); // [21-3-21] SUCCESSFULLY EXECUTED @DUE BOARD -> NOW CALLED IN TASK EXECUTION INOS ONLY
-                       // [23-3-21] IN ORDER TO EXECUTE ALONG DXLS BAUDRATE(9600) CHANGED FILE_WRITE
-  delay(500);
+  // INITIALIZE SD CARD -> REMOVED HERE
+ 
+  // MAKE SESSION DIRECTORIES -> REMOVED HERE
   
   // SETUP DEFAULT ACTIONS
-  DEBUG_SERIAL.print(F(" [ SETUP ] ")); DEBUG_SERIAL.println(F("PINGING CONNECTED DYNAMIXELS PRO+"));
-  ping_motors();
-  delay(500);
+  //DEBUG_SERIAL.print(F(" [ SETUP ] ")); DEBUG_SERIAL.println(F("PINGING CONNECTED DYNAMIXELS PRO+")); -> REMOVED HERE
+  //ping_motors();
+  //delay(500);
   
   DEBUG_SERIAL.print(F(" [ SETUP ] ")); DEBUG_SERIAL.println(F("INITIALIZING STEPPER MOTOR GLOBAL VARIABLES"));
   //stp.read_STP_EEPROM_settings(&currentDirStatus, &currentAbsPos_double, &VelocityLimitStp, &AccelerationLimitStp, &MaxPosLimitStp); // Initialize global Stepper Variables from EEPROM Memory
   //print_stp_eeprom();             // print_stp_eeprom - > init_stp_globals
   init_robot_globals(); // <- this to be used!
-  delay(500);
+  //delay(500);
   
   // initialize data packets for libraries communication
   DEBUG_SERIAL.print(F(" [ SETUP ] ")); DEBUG_SERIAL.println(F("BUILDING DATA PACKETS FOR LIBRARIES DATA EXCHANGE"));
   setup_libraries_packets();
-  delay(500);
+  //delay(500);
   
-  DEBUG_SERIAL.print(F(" [ SETUP ] ")); DEBUG_SERIAL.println(F("EXTRACTING CURRENT CONFIGURATION"));
-  read_current_configuration();
-  delay(500);
-      
   // SETUP USER-SELECTED ACTIONS 
   bool stop_setup = false; // flag for setup menu robot loop
 
   while(!stop_setup) //wh1
   {
-    /*
-     * I. SLOW MOTOR HOMING
-     */
-    DEBUG_SERIAL.println(F("[ SETUP ] HOME MOTORS SLOW?"));
-    DEBUG_SERIAL.parseInt();
-    while (DEBUG_SERIAL.available() == 0) {};
-    user_input = DEBUG_SERIAL.parseInt();
-    DEBUG_SERIAL.print(F("[ USER INPUT ]")); DEBUG_SERIAL.print(F("   ->   ")); DEBUG_SERIAL.println(user_input);
-  
-    if( user_input == YES_b ) 
-    {
-      DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("SLOW HOMING MOTORS"));
-
-      slow_home_motors();
-    }
-    
     /*
      * II. TEST GRIPPER
      */
@@ -414,30 +355,7 @@ void setup()
       setup_current_sensor();
     }
 
-    /*
-     * V. CHECK DYNAMIXELS ARE NOT MOVING
-     */
-    DEBUG_SERIAL.println(F("[ SETUP ] CHECK DYNAMIXEL MOVING?"));
-    DEBUG_SERIAL.parseInt();
-    while (DEBUG_SERIAL.available() == 0) {};
-    user_input = DEBUG_SERIAL.parseInt();
-    DEBUG_SERIAL.print(F("[ USER INPUT ]")); DEBUG_SERIAL.print(F("   ->   ")); DEBUG_SERIAL.println(user_input);
-  
-    if( user_input == YES_b ) //start->if1
-    {
-        if( stp.getDynamixelsMotionState(&meta_dxl, PTR_2_dxl_mov_packet, &stp_error) )
-        {
-            DEBUG_SERIAL.println(F("[  INFO  ] DYNAMIXELS NOT MOVING [  SUCCESS ]"));
-            DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(stp_error);
-        }
-        else
-        {
-            DEBUG_SERIAL.println(F("[  INFO  ] DYNAMIXELS NOT MOVING [  FAILED ]"));
-            DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(stp_error);              
-        }
-    }
-            
-    /*
+        /*
      * FINISH SETUP
      */
     DEBUG_SERIAL.println(F("[ SETUP ] EXIT SETUP?"));
@@ -456,157 +374,13 @@ void setup()
       DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("SETUP MENU WILL REPEAT"));
     }
     
-  } // wh1
 
-} // END SETUP
-
-/*
- * MAIN LOOP
- */
-void loop() {
-  /*
-   * I. User must specify operating mode
-   */
-  DEBUG_SERIAL.println(F("Set ROBOT OPERATION MODE: FORMAT 'mode':"));
-  DEBUG_SERIAL.parseInt();
-  while (DEBUG_SERIAL.available() == 0) {};
-  user_input = DEBUG_SERIAL.parseInt();
-  DEBUG_SERIAL.print(F("[ USER INPUT ]")); DEBUG_SERIAL.print(F("   ->   ")); DEBUG_SERIAL.print(user_input);
-
-  /*
-   * II. <p2pcsp>
-   */
-   if( user_input == p2pcsp_b  ) //start->if1
-   {
-   
-   while( (!END_P2PCSP) ) //start->wh1
-   {
-      stp.setStepperLed(stepper_entered_p2pcsp);
-      delay(1000);
-      
-      DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("BEGIN CONFIGURATION SPACE P2P EXECUTION..."));
-
-      // II.1 Display to user the current configuration
-      read_current_configuration(); 
-      
-      // II.2 Specify desired configuration
-      DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("SPECIFY TASK POINT INDEX"));
-      DEBUG_SERIAL.parseInt();
-      while (DEBUG_SERIAL.available() == 0) {};
-      p2p_index = DEBUG_SERIAL.parseInt();
-      DEBUG_SERIAL.print(F("[ USER INPUT ]")); DEBUG_SERIAL.print(F("   ->   ")); DEBUG_SERIAL.println(p2p_index);
-      DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("SELECTED CONFIGURATION SPACE POINT:")); 
-      for (size_t i = 0; i < nDoF; i++)
-      {
-        DEBUG_SERIAL.print(F(" [ JOINT ")); DEBUG_SERIAL.print(i+1); DEBUG_SERIAL.print(F(" ] ")); DEBUG_SERIAL.println(p2p_list[p2p_index][i],4);
-
-        desiredConfiguration[i] = p2p_list[p2p_index][i];
-      }
-      
-      // II.3 SIMPE P2P EXECUTION FUNCTION TO BE PLACED HERE!
-      p2pcsp_Texec = p2p_dur[p2p_index];
-      p2pcsp2_sm(currentConfiguration, desiredConfiguration, p2pcsp_Texec);
-      
-      DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("P2P EXECUTED"));
-      
-      /*
-       * FINISH p2pcsp
-       */
-      DEBUG_SERIAL.println(F("[ INFO ] EXIT <p2pcsp>?"));
-      DEBUG_SERIAL.parseInt();
-      while (DEBUG_SERIAL.available() == 0) {};
-      user_input = DEBUG_SERIAL.parseInt();
-      DEBUG_SERIAL.print(F("[ USER INPUT ]")); DEBUG_SERIAL.print(F("   ->   ")); DEBUG_SERIAL.println(user_input);
-      
-      if( user_input == YES_b ) //start->if1
-      {
-        END_P2PCSP    = true;
-        DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("<p2pcsp> FINISHED"));
-      }
-      else
-      {
-        END_P2PCSP    = false;
-        DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("<p2pcsp> WILL REPEAT"));
-      } 
-
-   }//end->wh1
-   
-   }//end->if1
-
-  /*
-   * III. <trajcsp>
-   */
-   if( user_input == trajcsp_b ) //start->if2
-   {
-   
-   while( (!END_TRAJCSP) ) //start->wh2
-   {
-      DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("BEGIN CONFIGURATION SPACE TRAJECTORY EXECUTION..."));
-
-      // SIMPE TRAJ EXECUTION FUNCTION TO BE PLACED HERE!
-      DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("TRAJECTORY EXECUTED"));
-      
-      /*
-       * FINISH trajcsp
-       */
-      DEBUG_SERIAL.println(F("[ INFO ] EXIT <trajcsp>?"));
-      DEBUG_SERIAL.parseInt();
-      while (DEBUG_SERIAL.available() == 0) {};
-      user_input = DEBUG_SERIAL.parseInt();
-      DEBUG_SERIAL.print(F("[ USER INPUT ]")); DEBUG_SERIAL.print(F("   ->   ")); DEBUG_SERIAL.println(user_input);
-      
-      if( user_input == YES_b ) //start->if1
-      {
-        END_TRAJCSP    = true;
-        DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("<trajcsp> FINISHED"));
-      }
-      else
-      {
-        END_TRAJCSP    = false;
-        DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("<trajcsp> WILL REPEAT"));
-      } 
-
-   }//end->wh2
-   
-   }//end->if2  
-
-  /*
-   *  RESET FLAGS
-   */
-    END_P2PCSP    = false;
-    END_TRAJCSP   = false;
-    //END_HOME      = false;
-    //END_FORCE     = false;
-    //END_ACCEL     = false;
-      
-}// END LOOP 
-
-/*
- *  INTERRUPT FUNCTIONS USED
- */
-void changeStepperDirInterrupt1()
-{
-  currentDirStatus = !currentDirStatus;
-  KILL_MOTION = true;
-}
-
-/*
- * TIMING ARDUINO THROUGH SERIAL PORT
- */
- time_t requestSync()
-{
-  DEBUG_SERIAL.write(TIME_REQUEST);  
-  return 0; // the time will be sent later in response to serial mesg
-}
-
-void processSyncMessage() {
-  unsigned long pctime;
-  const unsigned long DEFAULT_TIME = 1357041600; // Jan 1 2013
-
-  if(DEBUG_SERIAL.find(TIME_HEADER)) {
-     pctime = DEBUG_SERIAL.parseInt();
-     if( pctime >= DEFAULT_TIME) { // check the integer is a valid time (greater than Jan 1 2013)
-       setTime(pctime); // Sync Arduino clock to the time received on the serial port
-     }
   }
+
+    
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+
 }

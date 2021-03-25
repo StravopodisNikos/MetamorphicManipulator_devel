@@ -19,10 +19,12 @@
   PTR2RobotDataLog = &RobotDataLog;
 
   // Create the files for data logging 
-  // until 15-3-21 only 3 data logs will be used(pos/vel/force)
+  // [15-3-21] Yet only 3 data logs will be used(pos/vel/force)
   // open/close and write in log will be called inside:
-  // syncSetStepperGoalPositionVarStep2/execute_StpTrapzProfile2 
-  create_logfiles();
+  // syncSetStepperGoalPositionVarStep2/execute_StpTrapzProfile2
+  // [22-3-21] Added current sensor log file
+  // [25-3-21] Crashes when successfully executed at setup and then called here. Also crashes when it is called for the second time!
+  //create_logfiles();
   
   // give value to global variables for current/goal joint 1 position
   currentAbsPos_double = q_i[0];
@@ -77,6 +79,12 @@
       dxl_prof_vel[id_count]   = meta_dxl.convertRadPsec2DxlVelUnits(p2pcsp_joint_velocities[id_count+1]);
       dxl_prof_accel[id_count] = meta_dxl.convertRadPsec2_2_DxlAccelUnits(p2pcsp_joint_accelerations[id_count+1]);
 
+      // Modify acceleration for (yet) undefined bug
+      if(dxl_prof_accel[id_count] < 75 )
+      {
+        dxl_prof_accel[id_count] = 75;
+      }
+       
       DEBUG_SERIAL.print(F("[  INFO  ] SETTING DXL PV[")); DEBUG_SERIAL.print(id_count); DEBUG_SERIAL.print(F("] : ")); DEBUG_SERIAL.println(dxl_prof_vel[id_count]);
       DEBUG_SERIAL.print(F("[  INFO  ] SETTING DXL PA[")); DEBUG_SERIAL.print(id_count); DEBUG_SERIAL.print(F("] : ")); DEBUG_SERIAL.println(dxl_prof_accel[id_count]);
    }
@@ -118,12 +126,6 @@
   }
 
   // 4.DYNAMIXELS SET GOAL POSITION
-  //dxl_goal_position[0] = meta_dxl.convertRadian2DxlPulses(q_f[1]);
-  //dxl_goal_position[1] = meta_dxl.convertRadian2DxlPulses(q_f[2]);
-  //dxl_goal_position[2] = meta_dxl.convertRadian2DxlPulses(q_f[3]);
-  //DEBUG_SERIAL.print(F("[  INFO  ] SETTING DXL GP[0] : ")); DEBUG_SERIAL.println(dxl_goal_position[0]);
-  //DEBUG_SERIAL.print(F("[  INFO  ] SETTING DXL GP[1] : ")); DEBUG_SERIAL.println(dxl_goal_position[1]);
-  //DEBUG_SERIAL.print(F("[  INFO  ] SETTING DXL GP[2] : ")); DEBUG_SERIAL.println(dxl_goal_position[2]);
   for(size_t id_count = 0; id_count < sizeof(dxl_id); id_count++)
   {
     dxl_goal_position[id_count] = meta_dxl.convertRadian2DxlPulses(q_f[id_count+1]);
@@ -142,22 +144,23 @@
     DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);
   }
 
-  // 5.STEPPER SET GOAL POSITION - HERE STATE MACHINE FUNCTION IS IMPLEMENTED!!! [7-3-21]
-  bool update_force_during_exec = true;
-  bool update_imu_during_exec = false;
-  float FORCE_MEASUREMENTS[num_FORCE_SENSORS];
-  sensors::imu_filter selected_filter = sensors::imu_filter::MAHONY_F;
+  // 5.STEPPER SET GOAL POSITION  
+  // [7-3-21]  - STATE MACHINE FUNCTION IS IMPLEMENTED
+  // [21-3-21] - ADDED STEPPER CHECK IF DXL HAVE FINISHED - MASSIVE CHANGES IN syncSetStepperGoalPositionVarStep3
+  bool update_force_during_exec = false;
+  bool update_current_during_exec = false;
   PTR_2_meta_dxl = &meta_dxl; PTR_2_dxl_pp_packet = &dxl_pp_packet; PTR_2_dxl_pv_packet = &dxl_pv_packet;
-  //return_function_state =  stp.syncSetStepperGoalPositionVarStep2(PTR2RobotDataLog, LOGFILES, LOG_FILES, IMUSensor, PTR_2_imu_packet, selected_filter, ForceSensor, ForceSensorHX711, FORCE_MEASUREMENTS, &sensor_error, &currentAbsPos_double, &goalAbsPos_double, &Aexec, &p2pcsp_Texec,  &currentDirStatus, &KILL_MOTION, &LIN_SEG_EXISTS, update_force_during_exec,update_imu_during_exec,  P2P_PROF_STEPS,  PTR_2_meta_dxl, PTR_2_dxl_pp_packet, PTR_2_dxl_pv_packet,  &error_code_received);
-    return_function_state =  stp.syncSetStepperGoalPositionVarStep3(PTR2RobotDataLog, LOGFILES, LOG_FILES, ForceSensor, ForceSensorHX711, FORCE_MEASUREMENTS, &sensor_error, &currentAbsPos_double, &goalAbsPos_double, &Aexec, &p2pcsp_Texec,  &currentDirStatus, &KILL_MOTION, &LIN_SEG_EXISTS, update_force_during_exec,update_imu_during_exec,  P2P_PROF_STEPS,  PTR_2_meta_dxl, PTR_2_dxl_pp_packet, PTR_2_dxl_pv_packet,  &error_code_received);
+  return_function_state =  stp.syncSetStepperGoalPositionVarStep3(PTR2RobotDataLog, LOGFILES, LOG_FILES, ForceSensor, ForceSensorHX711, ptr2joint1_cur_sensor, &sensor_error, &currentAbsPos_double, &goalAbsPos_double, &Aexec, &LIN_SEG_EXISTS, update_force_during_exec, update_current_during_exec , P2P_PROF_STEPS,  PTR_2_meta_dxl, PTR_2_dxl_pp_packet, PTR_2_dxl_pv_packet, PTR_2_dxl_pc_packet, PTR_2_dxl_mov_packet,  &error_code_received);
   if (return_function_state){
     DEBUG_SERIAL.println(F("[    INFO    ] SYNC WRITE GOAL POSITION STEPPER [  SUCCESS ]"));
-    //DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);
+    DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);
+    stp.setStepperLed(stepper_synced_motion_success);
   }
   else
   {
     DEBUG_SERIAL.println(F("[    ERROR   ] SYNC WRITE GOAL POSITION STEPPER [  FAILED ]"));
     DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(error_code_received);
+    stp.setStepperLed(stepper_critical_error_led);
   }
   
   p2p_duration = millis() - motor_movement_start;                                              // Calculates Stepper Motion Execution Time 
