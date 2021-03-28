@@ -26,6 +26,31 @@ void read_current_configuration()
   {
     DEBUG_SERIAL.print(F(" [ JOINT ")); DEBUG_SERIAL.print(i+1); DEBUG_SERIAL.print(F(" ] ")); DEBUG_SERIAL.println(currentConfiguration[i],4);
   }
+
+  // [26-3-21] Check if getJointsAbsPosition_rad update function works
+  // This must return the same values with above!!! - TESTED-OK
+  // [27-3-21] Added timing counter to help me understand real time data logging limits -> removed: Found that need 5.5 msec to respond!
+  /*
+  bool check_robot_configuration_at_setup = true;
+  uint32_t first_step_value = 0; // this makes it to always return zero pos for stepper
+  time_now_micros = micros();
+  stp.getJointsAbsPosition_rad(currentConfiguration, PTR_2_meta_dxl, PTR_2_dxl_pp_packet, first_step_value, check_robot_configuration_at_setup, &error_code_received);
+  total_time_trying = micros() - time_now_micros;
+  DEBUG_SERIAL.print(F("[    INFO    ] SYNC READ CONFIGURATION TOTAL TIME: ")); DEBUG_SERIAL.print(total_time_trying); DEBUG_SERIAL.println(F("[us]"));
+  if (error_code_received == NO_ERROR){
+    DEBUG_SERIAL.println(F("[    INFO    ] SYNC READ POSITION [  SUCCESS ]"));
+    DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("CURRENT ROBOT JOINTS POSITION [rad]:")); 
+    for (size_t i = 0; i < nDoF; i++)
+    {
+      DEBUG_SERIAL.print(F(" [ JOINT ")); DEBUG_SERIAL.print(i+1); DEBUG_SERIAL.print(F(" ] ")); DEBUG_SERIAL.println(currentConfiguration[i],4);
+    }
+  }
+  else
+  {
+    DEBUG_SERIAL.println(F("[    ERROR   ] SYNC READ POSITION [  FAILED ]"));
+    DEBUG_SERIAL.print(F("[  ERROR CODE  ]")); DEBUG_SERIAL.println(error_code_received);
+  }
+  */
       
   return;
 }

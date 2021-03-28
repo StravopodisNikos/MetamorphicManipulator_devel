@@ -56,8 +56,31 @@
     }
 
     // 2.3 WAIT FOR DYNAMIXELS TO STOP MOVING
-    delay(5000); // wait for Dynamixels to HOME - > here is Moving must be implemented
-    meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), stepper_turn_off_led, dxl); meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), stepper_motors_homed_indicator, dxl);
+    // [27-3-21] Wait for Dynamixels to HOME, replaced delay with smart waiting...
+    // Waits until dxl respond that finished moving OR timeouts.
+    delay(5000); // must give time to start moving!!!
+    
+    time_now_millis = millis();
+    STOP_WAITING = false;
+    while (!stp.getDynamixelsMotionState(&meta_dxl, PTR_2_dxl_mov_packet, &stp_error) && (!STOP_WAITING) ) // now start asking for Moving state
+    {
+      delay(100);
+      
+      total_time_trying = millis() - time_now_millis;
+      if (total_time_trying > HOMING_TIMEOUT_MILLIS)
+      {
+        STOP_WAITING = true; 
+      }
+    }
+    
+    if (!STOP_WAITING) // Dxls homed successfully on time
+    {
+      meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), stepper_turn_off_led, dxl); meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), dxl_motors_homed_indicator, dxl); 
+    }
+    else
+    {
+      meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), stepper_turn_off_led, dxl); meta_dxl.setDynamixelLeds(dxl_id, sizeof(dxl_id), dxl_critical_error_led, dxl);       
+    }
 
     // 2.4 Torque Off Dynamixels
     return_function_state = meta_dxl.setDynamixelsTorqueOFF(dxl_id, sizeof(dxl_id), dxl);

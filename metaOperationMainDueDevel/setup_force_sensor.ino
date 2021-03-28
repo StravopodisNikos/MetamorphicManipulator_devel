@@ -29,6 +29,7 @@ ForceSensorHX711 = & SingleForceSensorHX711;
   else
   {
       DEBUG_SERIAL.print(F("[    INFO    ] SENSOR AXIS ")); DEBUG_SERIAL.print(i); DEBUG_SERIAL.println(F(" PINGED  [ SUCCESS ]"));
+      DEBUG_SERIAL.print(F("[  ERROR CODE  ]")); DEBUG_SERIAL.println(sensor_error);
   }
   //delay(5);
  }
@@ -63,17 +64,17 @@ ForceSensorHX711 = & SingleForceSensorHX711;
  */
  //float force_measurements_nwts[num_FORCE_SENSORS];
  //float force_measurements_kgs[num_FORCE_SENSORS];
- float *force_measurements_nwts;
- double *force_measurements_kgs;
+ //float force_measurements_nwts;
+ float force_measurements_kgs;
  for (size_t i = 0; i < 1; i++)
  {
     //return_function_state = ForceSensor[i].measureForceKilos((ForceSensorHX711+i), (force_measurements_kgs+i), &sensor_error);
-     return_function_state = ForceSensor->measureForceKilos(ForceSensorHX711, force_measurements_kgs, &sensor_error);   
+     return_function_state = ForceSensor->measureForceKilos(ForceSensorHX711, &force_measurements_kgs, &sensor_error);   
     if (return_function_state)
     {
       DEBUG_SERIAL.print(F("[    INFO    ] FORCE SENSOR")); DEBUG_SERIAL.print(i); DEBUG_SERIAL.println(F(" MEASURED  [ SUCCESS ]"));
       //DEBUG_SERIAL.print(F("[MEASUREMENT: "));  DEBUG_SERIAL.print(force_measurements_kgs[i]); DEBUG_SERIAL.println(F(" [N]"));
-      DEBUG_SERIAL.print(F("[MEASUREMENT: "));  DEBUG_SERIAL.print(*force_measurements_kgs); DEBUG_SERIAL.println(F(" [N]"));
+      DEBUG_SERIAL.print(F("[MEASUREMENT: "));  DEBUG_SERIAL.print(force_measurements_kgs); DEBUG_SERIAL.println(F(" [N]"));
     }
     else
     {

@@ -50,8 +50,12 @@ void setup_current_sensor()
   }
 
   // Measure current from all joints
+  // [27-3-21] Added timing counter to help me understand real time data logging limits
   bool check_robot_current_at_setup = true;
+  time_now_micros = micros();
   stp.getJointsCurrent_A(p2pcsp_joint_currents, ptr2joint1_cur_sensor, PTR_2_meta_dxl, PTR_2_dxl_pc_packet, check_robot_current_at_setup, &error_code_received);
+  total_time_trying = micros() - time_now_micros;
+  DEBUG_SERIAL.print(F("[    INFO    ] SYNC READ CURRENT TOTAL TIME: ")); DEBUG_SERIAL.print(total_time_trying); DEBUG_SERIAL.println(F("[us]"));
   if (error_code_received == NO_ERROR){
     DEBUG_SERIAL.println(F("[    INFO    ] SYNC READ CURRENT [  SUCCESS ]"));
     DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("CURRENT ROBOT JOINTS CURRENT [A]:")); 

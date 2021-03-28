@@ -40,7 +40,7 @@
  * INCLUDE LIBRARIES
  */
 // Core Libraries for Robot Motors Driving
-#include "DynamixelProPlusOvidiusShield.h"            
+#include "DynamixelProPlusOvidiusShield.h"  
 #include "CustomStepperOvidiusDueShield.h"            // This is the renamed and Due-modified version of the CustomStepperOvidiusShield
 // 3rd party libraries
 #include <Dynamixel2Arduino.h>
@@ -49,7 +49,9 @@
 #include <motorIDs.h>                                 // Includes motor IDs as set using Dynamixel Wizard
 #include <contolTableItems_LimitValues.h>             // Limit values for control table controlTableItems_LimitValues
 #include <utility/StepperMotorSettings.h>             // Includes Stepper Motor/Driver pin StepperMotorSettings
-#include <utility/stepper_led_indicators.h>             // Includes Stepper Motor/Driver pin StepperMotorSettings
+#include <utility/stepper_led_indicators.h>           // Includes Stepper Motor/Driver pin StepperMotorSettings
+#include <utility/dynamixel_settings.h>               // Includes settings for dynamixels
+#include <utility/dynamixel_led_indicators.h>               // Includes settings for dynamixels 
 #include <task_definitions.h>                         // Includes task points for execution
 //#include <led_indicators.h>                           // Led color/blinks for robot monitoring
 #include <utility/OvidiusSensors_config.h>            // Configuration for sensors used in robot
@@ -126,6 +128,7 @@ uint8_t  dxl_moving[sizeof(dxl_id)];
 /*
  * Timing variables 
  */
+ bool STOP_WAITING = false;
  int total_time_trying = 0;         // used to count time for opening comm objects. if exceed timeout limit, aborts opening
  bool TIME_NOT_SET     = true;      // used in TimeLib
  unsigned long time_now_micros;     // used for clocking functions
@@ -134,30 +137,25 @@ uint8_t  dxl_moving[sizeof(dxl_id)];
 /*
  * Configure Stepper/Dynamixel settings
  */
-double currentConfiguration[nDoF];
-double desiredConfiguration[nDoF];
-double p2pcsp_joint_velocities[nDoF];
-double p2pcsp_joint_currents[nDoF];
-double joint_velocities_limits[] = {1, 1.57, 1.57, 1.57};     // [rad/sec] must be implemented in EEPROM Stepper+Dxl!
-double p2pcsp_joint_accelerations[nDoF];
-double joint_accelerations_limits[] = {20, 87, 87, 87};       // [rad/sec^2] must be implemented in EEPROM Stepper+Dxl!
-double p2pcsp_Texec;
-double p2pcsp_Ta;
+float currentConfiguration[nDoF];
+float desiredConfiguration[nDoF];
+float p2pcsp_joint_velocities[nDoF];
+float p2pcsp_joint_currents[nDoF];
+float joint_velocities_limits[] = {1, 1.57, 1.57, 1.57};     // [rad/sec] must be implemented in EEPROM Stepper+Dxl!
+float p2pcsp_joint_accelerations[nDoF];
+float joint_accelerations_limits[] = {20, 87, 87, 87};       // [rad/sec^2] must be implemented in EEPROM Stepper+Dxl!
+float p2pcsp_Texec;
+float p2pcsp_Ta;
 
 /* 
  * Declare global variables used in CustomStepperMetamorphicManipulator 
  */
 bool return_function_state = false;
-double currentAbsPos_double;
-double goalAbsPos_double;
-double VelocityLimitStp;
-double AccelerationLimitStp;
-double MaxPosLimitStp;
-
-//double StpInitPos;                          // [21-3-21] WILL BE REMOVED AFTER SUCCESS HARDWARE TEST
-//double StpGoalPosition;
-//double StpVmax;
-//double StpAmax;
+float currentAbsPos_double;
+float goalAbsPos_double;
+float VelocityLimitStp;
+float AccelerationLimitStp;
+float MaxPosLimitStp;
 
 /* 
  *  SYNC WRITE structure objects for sending Dynamixel data - Data type are defined in DynamixelProPlusOvidiusShield.h
@@ -187,7 +185,7 @@ DXL_PC_PACKET  dxl_pc_packet,  *PTR_2_dxl_pc_packet;
  */
 Dynamixel2Arduino dxl(DXL_SERIAL, DXL_DIR_PIN);
 DynamixelProPlusOvidiusShield meta_dxl(dxl_id), *PTR_2_meta_dxl; // Object of custom class to access custom functions for Ovidius manipulator specific 
-CustomStepperOvidiusDueShield stp(STP1_ID, STEP_Pin, DIR_Pin, ENABLE_Pin, HOME_TRIGGER_SWITCH, HALL_SWITCH_PIN2, HALL_SWITCH_PIN3, RED_LED_PIN, GREEN_LED_PIN, BLUE_LED_PIN, SPR_1, GEAR_FACTOR_PLANETARY_TEST, FT_CLOSED_LOOP);
+CustomStepperOvidiusDueShield stp(STP1_ID, STEP_Pin, DIR_Pin, ENABLE_Pin, HOME_TRIGGER_SWITCH, HALL_SWITCH_PIN2, HALL_SWITCH_PIN3, RED_LED_PIN, GREEN_LED_PIN, BLUE_LED_PIN, SPR_1, GEAR_FACTOR_PLANETARY, FT_CLOSED_LOOP);
 
 /* 
  *  Create object for handling sensors+tools
@@ -197,6 +195,7 @@ uint32_t DUE_CLOCK_Hz = DUE_CLOCK_Hz_MAX;
 bool SD_INITIALIZED = false;
 tools::dataLogger RobotDataLog, *PTR2RobotDataLog;
 debug_error_type data_error;
+bool update_sensor_measurements[TOTAL_SENSORS_USED];
 //File root,dir, *PTR2ROOT, *ptr2dir;
 //File POS_LOG, VEL_LOG,FORCE_LOG;
 File LOGFILES[TOTAL_SENSORS_USED]; // 0->pos, 1->vel, 2->force 3->current -> this must be initialized @ start of task execution functions(i.e. p2pcsp_sm)
@@ -231,9 +230,12 @@ char LOG_POS[LOG_FILES_DIR_CHAR_LEN];
 char LOG_VEL[LOG_FILES_DIR_CHAR_LEN];
 char LOG_FORCE[LOG_FILES_DIR_CHAR_LEN];
 char LOG_CUR[LOG_FILES_DIR_CHAR_LEN];
-char * LOG_FILE_PATH[TOTAL_SENSORS_USED];                           // changes each time create_logfiles() is called(i.e. for each task execution) - must be expanded to nSensors!
-const char * PTRS2SENSOR_DIRS[TOTAL_SENSORS_USED];                  // implemented only once in session_mkdir() - must be expanded to nSensors!
- 
+// array of pointers used here!
+char * LOG_FILE_PATH[TOTAL_SENSORS_USED]; 
+//char * LOG_FILE_PATH = (char *)malloc(sizeof(char)*TOTAL_SENSORS_USED); // changes each time create_logfiles() is called(i.e. for each task execution) - must be expanded to nSensors!
+const char * PTRS2SENSOR_DIRS[TOTAL_SENSORS_USED];                      // implemented only once in session_mkdir() - must be expanded to nSensors!
+const char * FINAL_ACCESSED_FILES[TOTAL_SENSORS_USED];
+
 // 3axis force sensor was commented out because test uses single sensor
 /*
 sensors::force3axis ForceSensor[num_FORCE_SENSORS] = {
@@ -242,7 +244,7 @@ sensors::force3axis ForceSensor[num_FORCE_SENSORS] = {
     sensors::force3axis(DOUT_PIN_Z, SCK_PIN_Z),   //ForceSensor[2] -> ForceSensorZ
 }; */
 // Joint1 INA219 Current sensor
-double joint1_current_measurement;
+float joint1_current_measurement;
 sensors::current_packet CUR_DATA_PKG, *PTR_2_CUR_DATA_PKG;
 sensors::currentSensor joint1_cur_sensor, *ptr2joint1_cur_sensor;
 //Adafruit_INA219 ina219, * ptr2ina219; [24-3-21] Will use only ACS712 current module
@@ -324,11 +326,12 @@ void setup()
 
 
   
-  // MAKE SESSION DIRECTORIES
+  // MAKE SESSION DIRECTORIES AND SENSOR LOGFILES
   DEBUG_SERIAL.println(F("[ SETUP ] BUILDING SESSION DIRECTORIES"));
   session_mkdir();
   create_logfiles(); // [21-3-21] SUCCESSFULLY EXECUTED @DUE BOARD -> NOW CALLED IN TASK EXECUTION INOS ONLY
-                       // [23-3-21] IN ORDER TO EXECUTE ALONG DXLS BAUDRATE(9600) CHANGED FILE_WRITE
+                     // [23-3-21] IN ORDER TO EXECUTE ALONG DXLS BAUDRATE(9600) CHANGED FILE_WRITE
+                     // [26-3-21] Unitl dynamic memory re-allocation is mplemented, only a single log file for each sensor will be made for the whole session
   delay(500);
   
   // SETUP DEFAULT ACTIONS
@@ -337,8 +340,6 @@ void setup()
   delay(500);
   
   DEBUG_SERIAL.print(F(" [ SETUP ] ")); DEBUG_SERIAL.println(F("INITIALIZING STEPPER MOTOR GLOBAL VARIABLES"));
-  //stp.read_STP_EEPROM_settings(&currentDirStatus, &currentAbsPos_double, &VelocityLimitStp, &AccelerationLimitStp, &MaxPosLimitStp); // Initialize global Stepper Variables from EEPROM Memory
-  //print_stp_eeprom();             // print_stp_eeprom - > init_stp_globals
   init_robot_globals(); // <- this to be used!
   delay(500);
   

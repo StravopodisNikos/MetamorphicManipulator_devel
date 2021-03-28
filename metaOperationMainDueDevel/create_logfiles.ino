@@ -8,7 +8,7 @@ void create_logfiles()
   LOG_FILE_PATH[VEL_LOG_ID] = LOG_VEL;
   LOG_FILE_PATH[FOR_LOG_ID] = LOG_FORCE;
   LOG_FILE_PATH[CUR_LOG_ID] = LOG_CUR;
-  
+
   for (size_t i = 0; i < sizeof(LOG_FILES); i++) // sizeof(LOG_FILES)
   {    
     RobotDataLog.createFile(LOGFILES+i, PTRS2SENSOR_DIRS[i], LOG_FILE_PATH[i], &data_error);
@@ -24,7 +24,7 @@ void create_logfiles()
     delay(SD_STABIL_MILLIS);
   }
 
-  double first_data = 0;
+  float first_data[] = {0.5, 0.7854, -1.2508, 2.4870};
    
   // OPEN - WRITE - CLOSE SEQUENCE
   for (size_t i = 0; i < sizeof(LOG_FILES); i++) // sizeof(LOG_FILES)
@@ -42,10 +42,17 @@ void create_logfiles()
       DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(data_error);
     }
 
-    // WRITE SINGLE LINE
+    // DOES NOTHING TO THE FILE CREATED
+    delay(10);
+    
+    // WRITE 4 data (simulates the write inside the execute3 function) - [27-3-21] Added timing counter to help me understand real time data logging limits
+    /*
     data_cnt++;
     TIMESTAMP = millis();
-    RobotDataLog.writeData(first_data, TIMESTAMP ,data_cnt, LOGFILES+i, &data_error);
+    time_now_micros = micros();
+    RobotDataLog.writeData(first_data, sizeof(first_data),  TIMESTAMP ,data_cnt, LOGFILES+i, &data_error);
+    total_time_trying = micros() - time_now_micros;
+    DEBUG_SERIAL.print(F("[    INFO    ] WRITE DATA TOTAL TIME: ")); DEBUG_SERIAL.print(total_time_trying); DEBUG_SERIAL.println(F("[us]"));  
     if (data_error == NO_ERROR)
     {
       DEBUG_SERIAL.print(F("[ SETUP ] FIRST WRITE LOG FILE:")); DEBUG_SERIAL.print(LOG_FILES[i]); DEBUG_SERIAL.println(F(" SUCCESS "));
@@ -55,10 +62,16 @@ void create_logfiles()
       DEBUG_SERIAL.print(F("[ SETUP ] FIRST WRITE LOG FILE:")); DEBUG_SERIAL.print(LOG_FILES[i]); DEBUG_SERIAL.println(F(" FAILED "));
       DEBUG_SERIAL.print(F("[  ERROR CODE  ]"));DEBUG_SERIAL.println(data_error);
     }    
-
+    */
+    
     // CLOSE LOG FILE
     RobotDataLog.closeFile(LOGFILES+i,&data_error); 
   }
+
+  FINAL_ACCESSED_FILES[POS_LOG_ID] = LOG_FILE_PATH[POS_LOG_ID];
+  FINAL_ACCESSED_FILES[VEL_LOG_ID] = LOG_FILE_PATH[VEL_LOG_ID];
+  FINAL_ACCESSED_FILES[FOR_LOG_ID] = LOG_FILE_PATH[FOR_LOG_ID];
+  FINAL_ACCESSED_FILES[CUR_LOG_ID] = LOG_FILE_PATH[CUR_LOG_ID];
   
   return;
 }
