@@ -109,7 +109,7 @@ bool homingSwitchActivated = true;        // NC connection in trigger(despite si
 volatile byte currentDirStatus;
 uint32_t RELATIVE_STEPS_2_MOVE;
 unsigned char stp_error;
-volatile bool KILL_MOTION = false;
+volatile bool KILL_MOTION_DUMMY = false;
 
 /*
  * Declare extern variables defined in DynamixelProPlusOvidiusShield.h
@@ -263,7 +263,7 @@ float pitch, roll, yaw;
 sensors::imu_packet IMU_DATA_PKG, *PTR_2_imu_packet;
 sensors::imu_sensor_states ImuCurrentState;
  */
- 
+
 /*
  * SETUP
  */
@@ -587,8 +587,10 @@ void loop() {
  */
 void changeStepperDirInterrupt1()
 {
-  currentDirStatus = !currentDirStatus;
-  KILL_MOTION = true;
+  currentDirStatus  = !currentDirStatus;  // [29-3-21] Only used for setStepperHomePositionSlow -> TO DO: REMOVE THEM
+  KILL_MOTION_DUMMY = true;
+  
+  CustomStepperOvidiusDueShield::KILL_MOTION = true; // [29-3-21] This is the way! Used in execute_StpTrapzProfile3
 }
 
 /*

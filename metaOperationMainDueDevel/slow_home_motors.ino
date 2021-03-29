@@ -4,7 +4,7 @@
     DEBUG_SERIAL.println(F("[  INFO  ] HOMING STEPPER MOTOR... "));
     
     stp.setStepperLed(stepper_motors_moving_indicator);  
-    return_function_state = stp.setStepperHomePositionSlow( &currentAbsPos_double, &currentDirStatus, &KILL_MOTION, &stp_error);
+    return_function_state = stp.setStepperHomePositionSlow( &currentAbsPos_double, &currentDirStatus, &KILL_MOTION_DUMMY, &stp_error);
     if (return_function_state)
     {
       DEBUG_SERIAL.println(F("[    INFO    ] SLOW HOMING STEPPER MOTOR [  SUCCESS ]"));

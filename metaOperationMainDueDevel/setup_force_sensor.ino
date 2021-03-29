@@ -17,23 +17,28 @@ ForceSensorHX711 = & SingleForceSensorHX711;
 /*
  * Initializes pins for each sensor and timeout pings, sets state to FORCE_READY 
  */
- bool pinged_all_sensors = true;
+ bool pinged_all_sensors = false;
  for (size_t i = 0; i < 1; i++) // num_FORCE_SENSORS -> 1 to match testing_state_machine
  {
   //return_function_state = ForceSensor[i].setupForceSensor((ForceSensorHX711+i), manual_calibration_scale_factors[i] , &ForceCurrentState, &sensor_error);
     return_function_state = ForceSensor->setupForceSensor(ForceSensorHX711, manual_calibration_scale_factors[2] , &ForceCurrentState, &sensor_error);
   if (!return_function_state)
   {
-    pinged_all_sensors =  false; break;
+    pinged_all_sensors =  false;
+    DEBUG_SERIAL.print(F("[    INFO    ] SENSOR AXIS ")); DEBUG_SERIAL.print("Z"); DEBUG_SERIAL.println(F(" PINGED  [ SUCCESS ]"));
+    DEBUG_SERIAL.print(F("[  ERROR CODE  ]")); DEBUG_SERIAL.println(sensor_error);
+    break;
   }
   else
   {
+      pinged_all_sensors = true;
       DEBUG_SERIAL.print(F("[    INFO    ] SENSOR AXIS ")); DEBUG_SERIAL.print(i); DEBUG_SERIAL.println(F(" PINGED  [ SUCCESS ]"));
       DEBUG_SERIAL.print(F("[  ERROR CODE  ]")); DEBUG_SERIAL.println(sensor_error);
   }
   //delay(5);
  }
 
+ /*
  if(pinged_all_sensors)
  {
     DEBUG_SERIAL.println(F("[    INFO    ] 3 AXIS FORCE SENSOR PINGED [ SUCCESS ]")); // ALL SENSOR STATES->FORCE_IDLE
@@ -43,7 +48,8 @@ ForceSensorHX711 = & SingleForceSensorHX711;
     DEBUG_SERIAL.println(F("[    INFO    ] 3 AXIS FORCE SENSOR PINGED [ FAILED ]"));
     DEBUG_SERIAL.print(F("[  ERROR CODE  ]")); DEBUG_SERIAL.println(sensor_error);
  }
-
+ */
+ 
 /*
  * Serial prints the z-axis offset Z-AXIS->2
  */
