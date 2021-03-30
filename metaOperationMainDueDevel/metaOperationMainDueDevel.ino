@@ -71,18 +71,22 @@ byte NO_b      = 0;
 byte p2pcsp_b  = 2;
 byte trajcsp_b = 3;
 byte home_b    = 4;
+byte read_session_data_b = 5;
+
 // Auxiliary variables for DEBUG_SERIAL inputs
 unsigned char error_code_received;  // previous int
 byte user_input;
+byte file_id;
 //bool MENU_EXIT;
 //bool ACCESS_EEPROM;
 unsigned char p2p_index;
 /*
  * MAIN FLAGS USED TO CONTROL LOOPS
  */
-bool END_P2PCSP;                      
-bool END_TRAJCSP;
-//bool END_HOME;
+bool END_P2PCSP   = false;                      
+bool END_TRAJCSP  = false;
+bool END_HOME     = false;
+bool END_READ_SESSION_DATA = false;
 //bool END_FORCE;
 //bool END_ACCEL;
 /*
@@ -235,6 +239,8 @@ char * LOG_FILE_PATH[TOTAL_SENSORS_USED];
 //char * LOG_FILE_PATH = (char *)malloc(sizeof(char)*TOTAL_SENSORS_USED); // changes each time create_logfiles() is called(i.e. for each task execution) - must be expanded to nSensors!
 const char * PTRS2SENSOR_DIRS[TOTAL_SENSORS_USED];                      // implemented only once in session_mkdir() - must be expanded to nSensors!
 const char * FINAL_ACCESSED_FILES[TOTAL_SENSORS_USED];
+char read_data_buffer[100];
+int file_read_buffer_size = 100;
 
 // 3axis force sensor was commented out because test uses single sensor
 /*
@@ -572,11 +578,99 @@ void loop() {
    }//end->if2  
 
   /*
+   * IV. <home> -> [30-3-21] this should be done if something bad happened and stepper lost position
+   */
+   if( user_input == home_b ) //start->if2
+   {
+   
+   while( (!END_HOME) ) //start->wh2
+   {
+      DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("BEGIN RE-CALIBRATION HOMING EXECUTION..."));
+
+      slow_home_motors();
+      
+      /*
+       * FINISH home
+       */
+      DEBUG_SERIAL.println(F("[ INFO ] EXIT <home>?"));
+      DEBUG_SERIAL.parseInt();
+      while (DEBUG_SERIAL.available() == 0) {};
+      user_input = DEBUG_SERIAL.parseInt();
+      DEBUG_SERIAL.print(F("[ USER INPUT ]")); DEBUG_SERIAL.print(F("   ->   ")); DEBUG_SERIAL.println(user_input);
+      
+      if( user_input == YES_b ) //start->if1
+      {
+        END_HOME    = true;
+        DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("<home> FINISHED"));
+      }
+      else
+      {
+        END_HOME    = false;
+        DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("<home> WILL REPEAT"));
+      } 
+
+   }//end->wh2
+   
+   }//end->if2 
+
+  /*
+   * V. <read_session_data_b> -> [30-3-21] after files were created & data written, executed to plot in serial monitor the loggrd data
+   */
+   if( user_input == read_session_data_b ) //start->if5
+   {
+   
+   while( (!END_READ_SESSION_DATA) ) //start->wh5
+   {
+      DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("READING LOGGED DATA FROM CURRENT SESSION..."));
+
+      // SPECIFY LOG FILE TO READ
+      DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("SPECIFY LOG FILE ID TO READ:"));
+      DEBUG_SERIAL.parseInt();
+      while (DEBUG_SERIAL.available() == 0) {};
+      file_id = DEBUG_SERIAL.parseInt();
+
+      //START read_session_data
+      return_function_state = stp.readSessionFileLoggedData(PTR2RobotDataLog, LOGFILES, FINAL_ACCESSED_FILES , file_id, read_data_buffer, file_read_buffer_size ,MAX_DATA_LENGTH, &error_code_received);
+      
+      if (return_function_state)
+      {
+        DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("<read_session_data> SUCCESS"));
+        DEBUG_SERIAL.print(read_data_buffer);
+      }
+      else
+      {
+        DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("<read_session_data> FAILED"));
+      }
+      
+      //FINISH read_session_data
+      DEBUG_SERIAL.println(F("[ INFO ] EXIT <read_session_data>?"));
+      DEBUG_SERIAL.parseInt();
+      while (DEBUG_SERIAL.available() == 0) {};
+      user_input = DEBUG_SERIAL.parseInt();
+      DEBUG_SERIAL.print(F("[ USER INPUT ]")); DEBUG_SERIAL.print(F("   ->   ")); DEBUG_SERIAL.println(user_input);
+      
+      if( user_input == YES_b ) //start->if1
+      {
+        END_READ_SESSION_DATA    = true;
+        DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("<read_session_data> FINISHED"));
+      }
+      else
+      {
+        END_READ_SESSION_DATA    = false;
+        DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("<read_session_data> WILL REPEAT"));
+      } 
+
+   }//end->wh5
+   
+   }//end->if5 
+   
+  /*
    *  RESET FLAGS
    */
     END_P2PCSP    = false;
     END_TRAJCSP   = false;
-    //END_HOME      = false;
+    END_HOME      = false;
+    END_READ_SESSION_DATA    = false;
     //END_FORCE     = false;
     //END_ACCEL     = false;
       
