@@ -177,7 +177,7 @@
   // [25-3-21] - asks user which sensor to update/log during p2p execution
   
   PTR_2_meta_dxl = &meta_dxl; PTR_2_dxl_pp_packet = &dxl_pp_packet; PTR_2_dxl_pv_packet = &dxl_pv_packet; PTR_2_dxl_pc_packet = &dxl_pc_packet;
-  return_function_state =  stp.syncSetStepperGoalPositionVarStep3(PTR2RobotDataLog, LOGFILES, FINAL_ACCESSED_FILES, ForceSensor, ForceSensorHX711, ptr2joint1_cur_sensor, &sensor_error, &currentAbsPos_double, &goalAbsPos_double, &Aexec, &LIN_SEG_EXISTS, update_sensor_measurements , P2P_PROF_STEPS,  PTR_2_meta_dxl, PTR_2_dxl_pp_packet, PTR_2_dxl_pv_packet, PTR_2_dxl_pc_packet, PTR_2_dxl_mov_packet,  &error_code_received);  
+  return_function_state =  stp.syncSetStepperGoalPositionVarStep4(PTR2RobotDataLog, LOGFILES, FINAL_ACCESSED_FILES, ForceSensor, ForceSensorHX711, ptr2joint1_cur_sensor, &sensor_error, &currentAbsPos_double, &goalAbsPos_double, q_f, &Aexec, &LIN_SEG_EXISTS, update_sensor_measurements , P2P_PROF_STEPS,  PTR_2_meta_dxl, PTR_2_dxl_pp_packet, PTR_2_dxl_pv_packet, PTR_2_dxl_pc_packet, PTR_2_dxl_mov_packet,  &error_code_received);  
   if (return_function_state){
     DEBUG_SERIAL.println(F("[    INFO    ] SYNC WRITE GOAL POSITION STEPPER [  SUCCESS ]"));
     DEBUG_SERIAL.print(F("[  ERROR CODE - SENSOR]"));DEBUG_SERIAL.println(sensor_error);

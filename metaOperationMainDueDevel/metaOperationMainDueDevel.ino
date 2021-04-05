@@ -629,6 +629,7 @@ void loop() {
       while (DEBUG_SERIAL.available() == 0) {};
       file_id = DEBUG_SERIAL.parseInt();
 
+      /*
       //START read_session_data
       return_function_state = stp.readSessionFileLoggedData(PTR2RobotDataLog, LOGFILES, FINAL_ACCESSED_FILES , file_id, read_data_buffer, file_read_buffer_size ,MAX_DATA_LENGTH, &error_code_received);
       
@@ -641,7 +642,7 @@ void loop() {
       {
         DEBUG_SERIAL.print(F(" [ INFO ] ")); DEBUG_SERIAL.println(F("<read_session_data> FAILED"));
       }
-      
+      */
       //FINISH read_session_data
       DEBUG_SERIAL.println(F("[ INFO ] EXIT <read_session_data>?"));
       DEBUG_SERIAL.parseInt();
@@ -684,7 +685,7 @@ void changeStepperDirInterrupt1()
   currentDirStatus  = !currentDirStatus;  // [29-3-21] Only used for setStepperHomePositionSlow -> TO DO: REMOVE THEM
   KILL_MOTION_DUMMY = true;
   
-  CustomStepperOvidiusDueShield::KILL_MOTION = true; // [29-3-21] This is the way! Used in execute_StpTrapzProfile3
+  CustomStepperOvidiusDueShield::KILL_MOTION = true; // [29-3-21] This is the way! Used in execute_StpTrapzProfile3+4
 }
 
 /*
